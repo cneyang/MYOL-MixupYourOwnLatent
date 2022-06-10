@@ -6,10 +6,9 @@ import torch.optim as optim
 import torchvision.transforms as T
 
 import numpy as np
-from utils import MixupBYOL
+from byol import TriBYOL
 
 import utils
-from mixup import mixup_data
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -18,19 +17,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
-    parser.add_argument('--mixup_lambda', default=1, type=float, help='Lambda for mixup')
-    parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     parser.add_argument('--strong_aug', action='store_true', help='Use strong augmentation')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
-    mixup_lambda = args.mixup_lambda
     
-    if args.mixup:
-        model_name = 'projection_mixup_byol_lambda{}'.format(int(mixup_lambda))
-    else:
-        model_name = 'byol'
+    model_name = 'tribyol_sgd'
     if args.strong_aug:
         model_name += '_strong_aug'
 
@@ -39,18 +32,18 @@ if __name__ == '__main__':
     writer = SummaryWriter('runs/' + model_name)
 
     train_transform = utils.strong_train_transform if args.strong_aug else utils.train_transform
-    train_data = utils.CIFAR10Pair(root='/home/eugene/data', train=True, transform=train_transform, download=True)
+    train_data = utils.CIFAR10Triplet(root='/home/eugene/data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
-    result_path = f'results_byol_batch{batch_size}/'
+    result_path = f'results_tribyol_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.mkdir(result_path)
 
-    results = {'train_loss': [], 'mixup_loss': [], 'valid_loss':[]}
+    results = {'train_loss': [], 'valid_loss':[]}
     
     model = Model().cuda()
 
-    learner = MixupBYOL(
+    learner = TriBYOL(
         model.f,
         image_size=32,
         hidden_layer=-1,
@@ -59,7 +52,8 @@ if __name__ == '__main__':
         augment_fn=lambda x: x
     )
 
-    optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
+    # optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
+    optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
@@ -68,20 +62,12 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, _ in data_bar:
+        for x1, x2, x3, _ in data_bar:
             batch_size = x1.size(0)
-            x1, x2 = x1.cuda(), x2.cuda()
+            x1, x2, x3 = x1.cuda(), x2.cuda(), x3.cuda()
             
-            loss = learner(x1, x2)
+            loss = learner(x1, x2, x3)
             total_loss += loss.item() * batch_size
-
-            if args.mixup:
-                mixed_x, x1, x2, lam = mixup_data(x1, x2, use_cuda=True)
-                mixed_x = mixed_x.detach()
-
-                mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
-                mixup_loss = mixup_lambda * mixup_loss
-                loss += mixup_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -90,10 +76,8 @@ if __name__ == '__main__':
             learner.update_moving_average()
 
             total_num += batch_size
-            total_mixup_loss = mixup_loss.item() * batch_size if args.mixup else 0
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num))
         train_loss = total_loss / total_num
-        mixup_loss = total_mixup_loss / total_num
 
         # valid
         total_loss, total_num = 0, 0
@@ -101,11 +85,11 @@ if __name__ == '__main__':
 
         learner.eval()
         with torch.no_grad():
-            for x1, x2, _ in data_bar:
+            for x1, x2, x3, _ in data_bar:
                 batch_size = x1.size(0)
-                x1, x2 = x1.cuda(), x2.cuda()
+                x1, x2, x3 = x1.cuda(), x2.cuda(), x3.cuda()
                 
-                loss = learner(x1, x2)
+                loss = learner(x1, x2, x3)
 
                 total_num += batch_size
                 total_loss += loss.item() * batch_size
@@ -113,10 +97,8 @@ if __name__ == '__main__':
         valid_loss = total_loss / total_num
 
         writer.add_scalar('train_loss', train_loss, epoch)
-        writer.add_scalar('mixup_loss', mixup_loss, epoch)
         writer.add_scalar('valid_loss', valid_loss, epoch)
         results['train_loss'].append(train_loss)
-        results['mixup_loss'].append(mixup_loss)
         results['valid_loss'].append(valid_loss)
         
         # save statistics

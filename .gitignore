@@ -3,3 +3,5 @@
 /results_byol_batch100
 /run.sh
 /runs
+*.pth
+*.csv

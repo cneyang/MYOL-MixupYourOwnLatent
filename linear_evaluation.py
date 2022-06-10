@@ -10,7 +10,6 @@ import pandas as pd
 from tqdm import tqdm
 
 import utils
-from utils import MixupBYOL
 from model import Model
 
 class Net(nn.Module):
@@ -22,15 +21,6 @@ class Net(nn.Module):
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
         self.f = model.f
-        # learner = MixupBYOL(
-        #     model.f,
-        #     image_size=32,
-        #     hidden_layer=-1,
-        #     projection_size=128,
-        #     projection_hidden_size=512,
-        # )
-        # learner.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
-        # self.f = learner.net
 
         # classifier
         self.fc = nn.Linear(2048, num_class, bias=True)
@@ -83,13 +73,16 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
+    parser.add_argument('--algo', type=str, default='byol')
     parser.add_argument('--model_name', type=str, default='byol')
+    parser.add_argument('--checkpoint', type=str, default='best')
     parser.add_argument('--eval_only', action='store_true')
     args = parser.parse_args()
 
-    batch_size, epochs = args.batch_size, args.epochs
+    batch_size, epochs = 128, args.epochs
+    checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
     if not args.eval_only:
-        model_path = f'results_byol_batch100/{args.model_name}_100.pth'
+        model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
 
         train_data = CIFAR10(root='/home/eugene/data', train=True, transform=utils.train_transform, download=True)
 
@@ -116,11 +109,11 @@ if __name__ == '__main__':
             if best_acc<valid_acc_1:
                 best_epoch = epoch
                 best_acc = valid_acc_1
-                torch.save(model.state_dict(), f'results_byol_batch100/linear_{args.model_name}_model.pth')
+                torch.save(model.state_dict(), f'results_byol_batch{args.batch_size}/linear_{args.model_name}_model.pth')
                 
                 
             data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-            data_frame.to_csv(f'results_byol_batch100/linear_{args.model_name}_statistics.csv', index_label='epoch')
+            data_frame.to_csv(f'results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_statistics.csv', index_label='epoch')
 
         print("Best epoch:", best_epoch)
 
@@ -131,7 +124,7 @@ if __name__ == '__main__':
 
     test_results = {'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
     model = Net(num_class=len(test_data.classes))
-    model_path = f'results_byol_batch100/linear_{args.model_name}_model.pth'
+    model_path = f'results_byol_batch{args.batch_size}/linear_{args.model_name}_model.pth'
     model.load_state_dict(torch.load(model_path))
     model.cuda()
     test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)
