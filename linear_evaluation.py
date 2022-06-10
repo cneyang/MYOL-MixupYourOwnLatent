@@ -84,11 +84,12 @@ if __name__ == '__main__':
     if not args.eval_only:
         model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
 
-        train_data = CIFAR10(root='/home/eugene/data', train=True, transform=utils.train_transform, download=True)
+        train_transform = utils.train_transform
+        train_data = CIFAR10(root='/home/eugene/data', train=True, transform=train_transform, download=True)
 
         train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
-        # model setup and optimizer config
 
+        # model setup and optimizer config
         model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
         for param in model.f.parameters():
             param.requires_grad = False
@@ -109,8 +110,7 @@ if __name__ == '__main__':
             if best_acc<valid_acc_1:
                 best_epoch = epoch
                 best_acc = valid_acc_1
-                torch.save(model.state_dict(), f'results_byol_batch{args.batch_size}/linear_{args.model_name}_model.pth')
-                
+                torch.save(model.state_dict(), f'results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_model.pth')
                 
             data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
             data_frame.to_csv(f'results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_statistics.csv', index_label='epoch')
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     test_results = {'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
     model = Net(num_class=len(test_data.classes))
-    model_path = f'results_byol_batch{args.batch_size}/linear_{args.model_name}_model.pth'
+    model_path = f'results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_model.pth'
     model.load_state_dict(torch.load(model_path))
     model.cuda()
     test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)

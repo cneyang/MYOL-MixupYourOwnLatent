@@ -3,7 +3,6 @@ import argparse
 import pandas as pd
 import torch
 import torch.optim as optim
-import torchvision.transforms as T
 
 import numpy as np
 from byol import TriBYOL
@@ -23,15 +22,13 @@ if __name__ == '__main__':
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_sgd'
-    if args.strong_aug:
-        model_name += '_strong_aug'
+    model_name = 'tribyol'
 
     print(model_name)
     
     writer = SummaryWriter('runs/' + model_name)
 
-    train_transform = utils.strong_train_transform if args.strong_aug else utils.train_transform
+    train_transform = utils.train_transform
     train_data = utils.CIFAR10Triplet(root='/home/eugene/data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 

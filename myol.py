@@ -6,7 +6,7 @@ import torch.optim as optim
 import torchvision.transforms as T
 
 import numpy as np
-from utils import MixupBYOL
+from byol import MixupBYOL
 
 import utils
 from mixup import mixup_data
@@ -21,28 +21,25 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
     parser.add_argument('--mixup_lambda', default=1, type=float, help='Lambda for mixup')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
-    parser.add_argument('--strong_aug', action='store_true', help='Use strong augmentation')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     mixup_lambda = args.mixup_lambda
     
     if args.mixup:
-        model_name = 'projection_mixup_byol_lambda{}'.format(int(mixup_lambda))
+        model_name = 'myol_lambda{}'.format(int(mixup_lambda))
     else:
         model_name = 'byol'
-    if args.strong_aug:
-        model_name += '_strong_aug'
 
     print(model_name)
     
     writer = SummaryWriter('runs/' + model_name)
 
-    train_transform = utils.strong_train_transform if args.strong_aug else utils.train_transform
+    train_transform = utils.train_transform
     train_data = utils.CIFAR10Pair(root='/home/eugene/data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
-    result_path = f'results_byol_batch{batch_size}/'
+    result_path = f'results_myol_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.mkdir(result_path)
 
@@ -60,6 +57,7 @@ if __name__ == '__main__':
     )
 
     optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
+    # optimizer = optim.SGD(learner.parameters(), lr=0.03, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
