@@ -21,6 +21,7 @@ class Net(nn.Module):
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
         self.f = model.f
+        # self.f.fc = nn.Identity()
 
         # classifier
         self.fc = nn.Linear(2048, num_class, bias=True)
@@ -72,7 +73,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--weight_decay', type=float, default=1e-6)
+    # parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--algo', type=str, default='byol')
     parser.add_argument('--model_name', type=str, default='byol')
     parser.add_argument('--checkpoint', type=str, default='best')
@@ -84,17 +85,19 @@ if __name__ == '__main__':
     if not args.eval_only:
         model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
 
-        train_transform = utils.train_transform
-        train_data = CIFAR10(root='/home/eugene/data', train=True, transform=train_transform, download=True)
+        # transform = utils.tribyol_test_transform
+        transform = utils.train_transform
+        train_data = CIFAR10(root='/home/eugene/data', train=True, transform=transform, download=True)
 
         train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
         # model setup and optimizer config
         model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+
         for param in model.f.parameters():
             param.requires_grad = False
 
-        optimizer = optim.Adam(model.fc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = optim.Adam(model.fc.parameters(), lr=args.lr, weight_decay=1e-6)
         loss_criterion = nn.CrossEntropyLoss()
         results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [], 'valid_acc@1': []}
 

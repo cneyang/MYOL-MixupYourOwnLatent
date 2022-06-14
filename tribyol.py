@@ -16,8 +16,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
-    parser.add_argument('--strong_aug', action='store_true', help='Use strong augmentation')
+    parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
@@ -28,7 +27,8 @@ if __name__ == '__main__':
     
     writer = SummaryWriter('runs/' + model_name)
 
-    train_transform = utils.train_transform
+    train_transform = utils.tribyol_transform
+    # train_transform = utils.train_transform
     train_data = utils.CIFAR10Triplet(root='/home/eugene/data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
@@ -43,14 +43,14 @@ if __name__ == '__main__':
     learner = TriBYOL(
         model.f,
         image_size=32,
-        hidden_layer=-1,
+        hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,
         augment_fn=lambda x: x
     )
 
     # optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
-    optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
+    optimizer = optim.SGD(learner.parameters(), lr=0.03, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
