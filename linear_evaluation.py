@@ -21,7 +21,6 @@ class Net(nn.Module):
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
         self.f = model.f
-        # self.f.fc = nn.Identity()
 
         # classifier
         self.fc = nn.Linear(2048, num_class, bias=True)
@@ -72,8 +71,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--lr', type=float, default=1e-3)
-    # parser.add_argument('--lr', type=float, default=3e-4)
+    parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--algo', type=str, default='byol')
     parser.add_argument('--model_name', type=str, default='byol')
     parser.add_argument('--checkpoint', type=str, default='best')
@@ -85,7 +83,6 @@ if __name__ == '__main__':
     if not args.eval_only:
         model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
 
-        # transform = utils.tribyol_test_transform
         transform = utils.train_transform
         train_data = CIFAR10(root='/home/eugene/data', train=True, transform=transform, download=True)
 
