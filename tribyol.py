@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol'
+    model_name = 'tribyol_custom'
 
     print(model_name)
     
