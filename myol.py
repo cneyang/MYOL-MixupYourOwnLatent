@@ -28,7 +28,7 @@ if __name__ == '__main__':
     if args.mixup:
         model_name = 'myol_img_dim96_lambda{}'.format(int(mixup_lambda))
     else:
-        model_name = 'byol'
+        model_name = 'byol_img_dim96'
 
     print(model_name)
     
