@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     args = parser.parse_args()
 

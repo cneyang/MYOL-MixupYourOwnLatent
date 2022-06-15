@@ -81,10 +81,10 @@ if __name__ == '__main__':
 
     batch_size, epochs = 128, args.epochs
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
+    transform = utils.tribyol_test_transform
     if not args.eval_only:
         model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
 
-        transform = utils.tribyol_test_transform
         train_data = CIFAR10(root='/home/eugene/data', train=True, transform=transform, download=True)
 
         train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     loss_criterion = nn.CrossEntropyLoss()
 
     test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     test_results = {'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
     model = Net(num_class=len(test_data.classes))
