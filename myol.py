@@ -18,27 +18,25 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
-    parser.add_argument('--mixup_lambda', default=1, type=float, help='Lambda for mixup')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
-    mixup_lambda = args.mixup_lambda
     
     if args.mixup:
-        model_name = 'myol_img_dim96_lambda{}'.format(int(mixup_lambda))
+        model_name = 'myol_adam'
     else:
-        model_name = 'byol_img_dim96'
-
+        model_name = 'byol'
     print(model_name)
     
     writer = SummaryWriter('runs/' + model_name)
 
     train_transform = utils.tribyol_transform
-    train_data = utils.CIFAR10Pair(root='/home/eugene/data', train=True, transform=train_transform, download=True)
+    train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
-    result_path = f'results_myol_batch{batch_size}/'
+    algo = 'myol' if args.mixup else 'byol'
+    result_path = f'results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.mkdir(result_path)
 
@@ -55,7 +53,8 @@ if __name__ == '__main__':
         augment_fn=lambda x: x
     )
 
-    optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
+    optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    # optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
@@ -76,7 +75,6 @@ if __name__ == '__main__':
                 mixed_x = mixed_x.detach()
 
                 mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
-                mixup_loss = mixup_lambda * mixup_loss
                 loss += mixup_loss
 
             optimizer.zero_grad()
