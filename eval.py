@@ -75,7 +75,7 @@ if __name__ == '__main__':
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
 
-    transform = utils.test_transform
+    transform = utils.tribyol_test_transform
     train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
     test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
 

@@ -3,7 +3,6 @@ import argparse
 import pandas as pd
 import torch
 import torch.optim as optim
-import torchvision.transforms as T
 
 import numpy as np
 from byol import MixupBYOL
@@ -17,8 +16,8 @@ from torch.utils.tensorboard import SummaryWriter
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
+    parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     parser.add_argument('--mixup_lambda', default=1, type=float, help='Lambda for mixup')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
     args = parser.parse_args()
@@ -27,15 +26,15 @@ if __name__ == '__main__':
     mixup_lambda = args.mixup_lambda
     
     if args.mixup:
-        model_name = 'myol_lambda{}'.format(int(mixup_lambda))
+        model_name = 'myol_img_dim96_lambda{}'.format(int(mixup_lambda))
     else:
-        model_name = 'byol'
+        model_name = 'byol_img_dim96'
 
     print(model_name)
     
     writer = SummaryWriter('runs/' + model_name)
 
-    train_transform = utils.train_transform
+    train_transform = utils.tribyol_transform
     train_data = utils.CIFAR10Pair(root='/home/eugene/data', train=True, transform=train_transform, download=True)
     train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
 
@@ -50,14 +49,13 @@ if __name__ == '__main__':
     learner = MixupBYOL(
         model.f,
         image_size=32,
-        hidden_layer=-1,
+        hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,
         augment_fn=lambda x: x
     )
 
-    optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
-    # optimizer = optim.SGD(learner.parameters(), lr=0.03, momentum=0.9, weight_decay=4e-4)
+    optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
