@@ -3,4 +3,5 @@
 /run.sh
 /runs
 *.pth
+*.csv
 results*
