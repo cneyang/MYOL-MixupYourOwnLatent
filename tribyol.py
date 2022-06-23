@@ -16,12 +16,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_custom'
+    model_name = 'tribyol_{}'.format(args.optim)
 
     print(model_name)
     
@@ -48,7 +49,10 @@ if __name__ == '__main__':
         augment_fn=lambda x: x
     )
 
-    optimizer = optim.SGD(learner.parameters(), lr=0.03, momentum=0.9, weight_decay=4e-4)
+    if args.optim == 'adam':
+        optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    elif args.optim == 'sgd':
+        optimizer = optim.SGD(learner.parameters(), lr=0.03, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):

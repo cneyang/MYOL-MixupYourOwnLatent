@@ -17,14 +17,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
+    parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_adam'
+        model_name = 'myol_{}_alpha{}'.format(args.optim, args.alpha)
     else:
         model_name = 'byol'
     print(model_name)
@@ -53,8 +55,10 @@ if __name__ == '__main__':
         augment_fn=lambda x: x
     )
 
-    optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
-    # optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
+    if args.optim == 'adam':
+        optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    elif args.optim == 'sgd':
+        optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=4e-4)
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
@@ -71,7 +75,7 @@ if __name__ == '__main__':
             total_loss += loss.item() * batch_size
 
             if args.mixup:
-                mixed_x, x1, x2, lam = mixup_data(x1, x2, use_cuda=True)
+                mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
                 mixed_x = mixed_x.detach()
 
                 mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
