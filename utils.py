@@ -1,8 +1,9 @@
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter
+import random
 from torchvision import transforms
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import CIFAR10, Flowers102
 from torch.utils.data.sampler import SubsetRandomSampler
 
 
@@ -34,6 +35,16 @@ def create_datasets(batch_size, train_data):
                                                num_workers=4, drop_last=True)
 
     return train_loader, valid_loader
+
+class GaussianBlur(object):
+
+    def __init__(self, sigma=[.1, 2.]):
+        self.sigma = sigma
+
+    def __call__(self, x):
+        sigma = random.uniform(self.sigma[0], self.sigma[1])
+        x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
+        return x
 
 class CIFAR10Pair(CIFAR10):
     """CIFAR10 Dataset."""
@@ -68,6 +79,35 @@ class CIFAR10Triplet(CIFAR10):
 
         return pos_1, pos_2, pos_3, target
 
+class Flowers102Pair(Flowers102):
+    def __getitem__(self, index):
+        image_file, target = self._image_files[index], self._labels[index]
+        img = Image.open(image_file).convert('RGB')
+
+        if self.transform is not None:
+            pos_1 = self.transform(img)
+            pos_2 = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return pos_1, pos_2, target
+
+class Flowers102Triplet(Flowers102):
+    def __getitem__(self, index):
+        image_file, target = self._image_files[index], self._labels[index]
+        img = Image.open(image_file).convert('RGB')
+
+        if self.transform is not None:
+            pos_1 = self.transform(img)
+            pos_2 = self.transform(img)
+            pos_3 = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return pos_1, pos_2, pos_3, target
+
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),
@@ -82,6 +122,38 @@ tribyol_transform = transforms.Compose([
     transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p=0.8),
     transforms.RandomGrayscale(p=0.2),
     transforms.GaussianBlur(kernel_size=9),
+    transforms.ToTensor(),
+    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+
+flowers_transform = transforms.Compose([
+    transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),
+    transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+    transforms.RandomGrayscale(p=0.2),
+    transforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+
+flowers_test_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+
+strong_transform = transforms.Compose([
+    transforms.RandomResizedCrop(96, scale=(0.2, 1.0)),
+    transforms.RandomHorizontalFlip(p=0.75),
+    transforms.RandomApply([transforms.ColorJitter(1.6, 1.6, 1.6, 0.4)], p=0.8),
+    transforms.RandomGrayscale(p=0.4),
+    transforms.GaussianBlur(kernel_size=13),
+    transforms.ToTensor(),
+    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+
+weak_transform = transforms.Compose([
+    transforms.RandomResizedCrop(96, scale=(0.2, 1.0)),
+    transforms.RandomHorizontalFlip(p=0.25),
+    transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+    transforms.RandomGrayscale(p=0.1),
+    transforms.GaussianBlur(kernel_size=5),
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
 

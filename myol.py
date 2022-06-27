@@ -3,6 +3,7 @@ import argparse
 import pandas as pd
 import torch
 import torch.optim as optim
+from torch.utils.data import DataLoader
 
 import numpy as np
 from byol import MixupBYOL
@@ -15,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
@@ -31,14 +33,21 @@ if __name__ == '__main__':
         model_name = 'byol'
     print(model_name)
     
-    writer = SummaryWriter('runs/' + model_name)
+    writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
-    train_transform = utils.tribyol_transform
-    train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
-    train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
+    if args.dataset == 'cifar10':
+        train_transform = utils.tribyol_transform
+        train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
+    elif args.dataset == 'flowers102':
+        train_transform = utils.flowers_transform
+        train_data = utils.Flowers102Pair(root='./data', split='train', transform=train_transform, download=True)
+        valid_data = utils.Flowers102Pair(root='./data', split='val', transform=train_transform, download=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+        valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
 
     algo = 'myol' if args.mixup else 'byol'
-    result_path = f'results_{algo}_batch{batch_size}/'
+    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.mkdir(result_path)
 
@@ -124,7 +133,7 @@ if __name__ == '__main__':
             least_loss = valid_loss
             best_epoch = epoch
             torch.save(model.state_dict(), result_path+f'{model_name}.pth')
-        if epoch % (epochs//5) == 0:
+        if epoch % 10 == 0:
             torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
 
     print("Best epoch: ", best_epoch)

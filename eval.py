@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import CIFAR10, Flowers102
 
 import argparse
 import numpy as np
@@ -65,6 +65,7 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--algo', type=str, default='byol')
@@ -75,9 +76,14 @@ if __name__ == '__main__':
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
 
-    transform = utils.tribyol_test_transform
-    train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
-    test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
+    if args.dataset == 'cifar10':
+        transform = utils.tribyol_test_transform
+        train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
+    elif args.dataset == 'flowers102':
+        transform = utils.flowers_test_transform
+        train_data = Flowers102(root='./data', split='train', transform=transform, download=True)
+        test_data = Flowers102(root='./data', split='test', transform=transform, download=True)
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -86,7 +92,7 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
+    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=len(train_data.classes))
