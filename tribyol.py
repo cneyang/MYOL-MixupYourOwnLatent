@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
     if not os.path.exists(result_path):
-        os.mkdir(result_path)
+        os.makedirs(result_path)
 
     results = {'train_loss': [], 'valid_loss':[]}
     

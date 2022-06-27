@@ -49,7 +49,7 @@ if __name__ == '__main__':
     algo = 'myol' if args.mixup else 'byol'
     result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
-        os.mkdir(result_path)
+        os.makedirs(result_path)
 
     results = {'train_loss': [], 'mixup_loss': [], 'valid_loss':[]}
     
