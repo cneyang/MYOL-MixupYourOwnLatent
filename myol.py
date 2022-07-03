@@ -30,7 +30,7 @@ if __name__ == '__main__':
     if args.mixup:
         model_name = 'myol_{}_alpha{}'.format(args.optim, args.alpha)
     else:
-        model_name = 'byol'
+        model_name = 'byol_{}'.format(args.optim)
     print(model_name)
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)

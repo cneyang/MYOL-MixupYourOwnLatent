@@ -52,7 +52,7 @@ if __name__ == '__main__':
     learner = TriBYOL(
         model.f,
         image_size=32,
-        hidden_layer=-1,
+        hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,
         augment_fn=lambda x: x
@@ -116,7 +116,7 @@ if __name__ == '__main__':
             least_loss = valid_loss
             best_epoch = epoch
             torch.save(model.state_dict(), result_path+f'{model_name}.pth')
-        if epoch % (epochs//5) == 0:
+        if epoch % 10 == 0:
             torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
 
     print("Best epoch: ", best_epoch)

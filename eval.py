@@ -151,4 +151,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
 
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_statistics_{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_statistics{checkpoint}.csv', index_label='epoch')
