@@ -30,7 +30,7 @@ def create_datasets(batch_size, train_data):
 
     # load validation data in batches
     valid_loader = torch.utils.data.DataLoader(train_data,
-                                               batch_size=batch_size,
+                                               batch_size=128,
                                                sampler=valid_sampler,
                                                num_workers=4, drop_last=True)
 
