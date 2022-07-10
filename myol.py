@@ -23,14 +23,21 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_{}_alpha{}'.format(args.optim, args.alpha)
+        model_name = 'myol_{}_alpha{}_{}'.format(args.optim, args.alpha, args.seed)
     else:
-        model_name = 'byol_{}'.format(args.optim)
+        model_name = 'byol_{}_{}'.format(args.optim, args.seed)
     print(model_name)
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)

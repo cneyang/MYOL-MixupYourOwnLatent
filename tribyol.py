@@ -20,11 +20,18 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
+    parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_{}'.format(args.optim)
+    model_name = 'tribyol_{}_{}'.format(args.optim, args.seed)
 
     print(model_name)
     
