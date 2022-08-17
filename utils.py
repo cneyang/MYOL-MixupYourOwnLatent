@@ -3,7 +3,7 @@ import torch
 from PIL import Image, ImageFilter
 import random
 from torchvision import transforms
-from torchvision.datasets import CIFAR10, Flowers102
+from torchvision.datasets import CIFAR10, Flowers102, FGVCAircraft
 from torch.utils.data.sampler import SubsetRandomSampler
 
 
@@ -108,6 +108,35 @@ class Flowers102Triplet(Flowers102):
 
         return pos_1, pos_2, pos_3, target
 
+class AircraftPair(FGVCAircraft):
+    def __getitem__(self, idx):
+        image_file, label = self._image_files[idx], self._labels[idx]
+        img = Image.open(image_file).convert('RGB')
+
+        if self.transform is not None:
+            pos_1 = self.transform(img)
+            pos_2 = self.transform(img)
+
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+
+        return pos_1, pos_2, label
+
+class AircraftTriplet(FGVCAircraft):
+    def __getitem__(self, idx):
+        image_file, label = self._image_files[idx], self._labels[idx]
+        img = Image.open(image_file).convert('RGB')
+
+        if self.transform is not None:
+            pos_1 = self.transform(img)
+            pos_2 = self.transform(img)
+            pos_3 = self.transform(img)
+
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+
+        return pos_1, pos_2, pos_3, label
+
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),
@@ -162,6 +191,6 @@ test_transform = transforms.Compose([
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
 
 tribyol_test_transform = transforms.Compose([
-    transforms.Resize(96),
+    transforms.Resize((96, 96)),
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])

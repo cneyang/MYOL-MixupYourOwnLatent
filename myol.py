@@ -1,5 +1,6 @@
 import os
 import argparse
+from matplotlib.transforms import Transform
 import pandas as pd
 import torch
 import torch.optim as optim
@@ -22,7 +23,9 @@ if __name__ == '__main__':
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
+    parser.add_argument('--beta', default=1.0, type=float, help='mixup weight')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--nmix', action='store_true', help='Use mixup')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
 
@@ -35,10 +38,23 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_{}_alpha{}_{}'.format(args.optim, args.alpha, args.seed)
+        if args.nmix:
+            model_name = 'myol_nmix_{}_alpha{}_{}'.format(args.optim, args.alpha, args.seed)
+        else:
+            model_name = 'myol_{}_alpha{}_{}'.format(args.optim, args.alpha, args.seed)
     else:
         model_name = 'byol_{}_{}'.format(args.optim, args.seed)
+
+    algo = 'myol' if args.mixup else 'byol'
+    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
     print(model_name)
+    if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
+        print(model_name, 'already exists')
+        import sys
+        sys.exit()
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
@@ -46,17 +62,19 @@ if __name__ == '__main__':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
-    elif args.dataset == 'flowers102':
-        train_transform = utils.flowers_transform
-        train_data = utils.Flowers102Pair(root='./data', split='train', transform=train_transform, download=True)
-        valid_data = utils.Flowers102Pair(root='./data', split='val', transform=train_transform, download=True)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-        valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
+    # elif args.dataset == 'flowers102':
+    #     train_transform = utils.tribyol_transform
+    #     train_data = utils.Flowers102Pair(root='./data', split='train', transform=train_transform, download=True)
+    #     valid_data = utils.Flowers102Pair(root='./data', split='val', transform=train_transform, download=True)
+    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
+    # elif args.dataset == 'aircraft':
+    #     train_transform = utils.tribyol_transform
+    #     train_data = utils.AircraftPair(root='./data', split='train', transform=train_transform, download=True)
+    #     valid_data = utils.AircraftPair(root='./data', split='val', transform=train_transform, download=True)
+    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    algo = 'myol' if args.mixup else 'byol'
-    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
-    if not os.path.exists(result_path):
-        os.makedirs(result_path)
 
     results = {'train_loss': [], 'mixup_loss': [], 'valid_loss':[]}
     
@@ -64,7 +82,7 @@ if __name__ == '__main__':
 
     learner = MixupBYOL(
         model.f,
-        image_size=32,
+        image_size=96,
         hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,
@@ -94,7 +112,7 @@ if __name__ == '__main__':
                 mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
                 mixed_x = mixed_x.detach()
 
-                mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
+                mixup_loss = learner.mixup(mixed_x, x1, x2, lam) * args.beta
                 loss += mixup_loss
 
             optimizer.zero_grad()

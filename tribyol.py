@@ -33,7 +33,15 @@ if __name__ == '__main__':
     
     model_name = 'tribyol_{}_{}'.format(args.optim, args.seed)
 
+    result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
     print(model_name)
+    if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
+        print(model_name, 'already exists')
+        import sys
+        sys.exit()
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
@@ -41,16 +49,19 @@ if __name__ == '__main__':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Triplet(root='./data', train=True, transform=train_transform, download=True)
         train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
-    elif args.dataset == 'flowers102':
-        train_transform = utils.flowers_transform
-        train_data = utils.Flowers102Triplet(root='./data', split='train', transform=train_transform, download=True)
-        valid_data = utils.Flowers102Triplet(root='./data', split='val', transform=train_transform, download=True)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-        valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
+    # elif args.dataset == 'flowers102':
+    #     train_transform = utils.tribyol_transform
+    #     train_data = utils.Flowers102Triplet(root='./data', split='train', transform=train_transform, download=True)
+    #     valid_data = utils.Flowers102Triplet(root='./data', split='val', transform=train_transform, download=True)
+    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
+    # elif args.dataset == 'aircraft':
+    #     train_transform = utils.tribyol_transform
+    #     train_data = utils.AircraftTriplet(root='./data', split='train', transform=train_transform, download=True)
+    #     valid_data = utils.AircraftTriplet(root='./data', split='val', transform=train_transform, download=True)
+    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
-    if not os.path.exists(result_path):
-        os.makedirs(result_path)
 
     results = {'train_loss': [], 'valid_loss':[]}
     
@@ -58,7 +69,7 @@ if __name__ == '__main__':
 
     learner = TriBYOL(
         model.f,
-        image_size=32,
+        image_size=96,
         hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,

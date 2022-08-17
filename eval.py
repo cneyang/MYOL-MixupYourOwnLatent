@@ -1,8 +1,10 @@
+from tabnanny import verbose
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, Flowers102
+from torchvision.datasets import CIFAR10, Flowers102, FGVCAircraft
 
+import os
 import argparse
 import numpy as np
 import pandas as pd
@@ -71,19 +73,39 @@ if __name__ == '__main__':
     parser.add_argument('--algo', type=str, default='byol')
     parser.add_argument('--model_name', type=str, default='byol')
     parser.add_argument('--checkpoint', type=str, default='best')
+    parser.add_argument('--seed', type=int, default=27407)
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
+
+    # if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+    #     import sys
+    #     sys.exit()
 
     if args.dataset == 'cifar10':
         transform = utils.tribyol_test_transform
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
     elif args.dataset == 'flowers102':
-        transform = utils.flowers_test_transform
+        # transform = utils.flowers_test_transform
+        transform = utils.tribyol_test_transform
         train_data = Flowers102(root='./data', split='train', transform=transform, download=True)
         test_data = Flowers102(root='./data', split='test', transform=transform, download=True)
+        num_class = 102
+    elif args.dataset == 'aircraft':
+        # transform = utils.flowers_test_transform
+        transform = utils.tribyol_test_transform
+        train_data = FGVCAircraft(root='./data', split='train', transform=transform, download=True)
+        test_data = FGVCAircraft(root='./data', split='test', transform=transform, download=True)
+        num_class = 100
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -92,10 +114,10 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}{checkpoint}.pth'
+    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
-    fc = FC(num_class=len(train_data.classes))
+    fc = FC(num_class=num_class)
     fc = fc.to(device)
 
     encoder.eval()
@@ -149,6 +171,6 @@ if __name__ == '__main__':
             test_results['test_acc@1'].append(test_acc_1)
             test_results['test_acc@5'].append(test_acc5)
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
-
+        
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
