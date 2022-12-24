@@ -263,8 +263,8 @@ class BYOL(nn.Module):
             target_proj_one.detach_()
             target_proj_two.detach_()
 
-        loss_one = loss_fn(online_pred_one, target_proj_two.detach())
-        loss_two = loss_fn(online_pred_two, target_proj_one.detach())
+        loss_one = loss_fn(online_pred_one, target_proj_two)
+        loss_two = loss_fn(online_pred_two, target_proj_one)
 
         loss = loss_one + loss_two
         return loss.mean()
@@ -407,10 +407,10 @@ class TriBYOL(BYOL):
             target_two_proj_three.detach_()
             target_two_proj_one.detach_()
 
-        loss_one_two = loss_fn(online_pred_one, target_one_proj_two.detach())
-        loss_two_one = loss_fn(online_pred_two, target_one_proj_one.detach())
-        loss_one_three = loss_fn(online_pred_one, target_two_proj_three.detach())
-        loss_three_one = loss_fn(online_pred_three, target_two_proj_one.detach())
+        loss_one_two = loss_fn(online_pred_one, target_one_proj_two)
+        loss_two_one = loss_fn(online_pred_two, target_one_proj_one)
+        loss_one_three = loss_fn(online_pred_one, target_two_proj_three)
+        loss_three_one = loss_fn(online_pred_three, target_two_proj_one)
 
         loss = (loss_one_two + loss_two_one) / 2 + (loss_one_three + loss_three_one) / 2
         return loss.mean()
