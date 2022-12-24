@@ -17,7 +17,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.03, type=float, help='Learning rate')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_original_{}'.format(args.optim, args.seed)
+    model_name = 'tribyol_original_{}'.format(args.seed)
 
     result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
     if not os.path.exists(result_path):
