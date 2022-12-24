@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_{}_{}'.format(args.optim, args.seed)
+    model_name = 'tribyol_original_{}'.format(args.optim, args.seed)
 
     result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
     if not os.path.exists(result_path):
@@ -48,22 +48,9 @@ if __name__ == '__main__':
     if args.dataset == 'cifar10':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Triplet(root='./data', train=True, transform=train_transform, download=True)
-        train_loader, valid_loader = utils.create_datasets(batch_size, train_data)
-    # elif args.dataset == 'flowers102':
-    #     train_transform = utils.tribyol_transform
-    #     train_data = utils.Flowers102Triplet(root='./data', split='train', transform=train_transform, download=True)
-    #     valid_data = utils.Flowers102Triplet(root='./data', split='val', transform=train_transform, download=True)
-    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
-    # elif args.dataset == 'aircraft':
-    #     train_transform = utils.tribyol_transform
-    #     train_data = utils.AircraftTriplet(root='./data', split='train', transform=train_transform, download=True)
-    #     valid_data = utils.AircraftTriplet(root='./data', split='val', transform=train_transform, download=True)
-    #     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    #     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=4)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
-
-    results = {'train_loss': [], 'valid_loss':[]}
+    results = {'train_loss': []}
     
     model = Model().cuda()
 
@@ -105,36 +92,11 @@ if __name__ == '__main__':
             data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num))
         train_loss = total_loss / total_num
 
-        # valid
-        total_loss, total_num = 0, 0
-        data_bar = tqdm(valid_loader)
-
-        learner.eval()
-        with torch.no_grad():
-            for x1, x2, x3, _ in data_bar:
-                batch_size = x1.size(0)
-                x1, x2, x3 = x1.cuda(), x2.cuda(), x3.cuda()
-                
-                loss = learner(x1, x2, x3)
-
-                total_num += batch_size
-                total_loss += loss.item() * batch_size
-                data_bar.set_description('Epoch: [{}/{}] Valid Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num))
-        valid_loss = total_loss / total_num
-
         writer.add_scalar('train_loss', train_loss, epoch)
-        writer.add_scalar('valid_loss', valid_loss, epoch)
         results['train_loss'].append(train_loss)
-        results['valid_loss'].append(valid_loss)
         
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
-        if valid_loss < least_loss:
-            least_loss = valid_loss
-            best_epoch = epoch
-            torch.save(model.state_dict(), result_path+f'{model_name}.pth')
         if epoch % 10 == 0:
             torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
-
-    print("Best epoch: ", best_epoch)
