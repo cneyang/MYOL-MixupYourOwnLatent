@@ -91,12 +91,12 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
 
     if args.dataset == 'cifar10':
-        transform = utils.tribyol_test_transform
+        transform = utils.test_transform
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'stl10':
-        transform = utils.tribyol_test_transform
+        transform = utils.test_transform
         train_data = STL10(root='./data', split='train', transform=transform, download=True)
         test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10

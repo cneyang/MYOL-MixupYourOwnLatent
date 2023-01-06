@@ -84,28 +84,18 @@ if __name__ == '__main__':
 
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
+    result_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_tribyol-eval_{args.seed}_statistics{checkpoint}.csv'
 
-    # if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
-    #     import sys
-    #     sys.exit()
+    if os.path.exists(result_path):
+        print('Already done')
+        # import sys
+        # sys.exit()
 
     if args.dataset == 'cifar10':
         transform = utils.tribyol_test_transform
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
-    elif args.dataset == 'flowers102':
-        # transform = utils.flowers_test_transform
-        transform = utils.tribyol_test_transform
-        train_data = Flowers102(root='./data', split='train', transform=transform, download=True)
-        test_data = Flowers102(root='./data', split='test', transform=transform, download=True)
-        num_class = 102
-    elif args.dataset == 'aircraft':
-        # transform = utils.flowers_test_transform
-        transform = utils.tribyol_test_transform
-        train_data = FGVCAircraft(root='./data', split='train', transform=transform, download=True)
-        test_data = FGVCAircraft(root='./data', split='test', transform=transform, download=True)
-        num_class = 100
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -173,4 +163,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(result_path, index_label='epoch')
