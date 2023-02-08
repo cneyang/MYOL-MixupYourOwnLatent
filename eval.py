@@ -1,9 +1,7 @@
-from tabnanny import verbose
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, Flowers102, FGVCAircraft
-
+from torchvision.datasets import CIFAR10, CIFAR100, STL10
 import os
 import argparse
 import numpy as np
@@ -95,6 +93,16 @@ if __name__ == '__main__':
         transform = utils.tribyol_test_transform
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
+    elif args.dataset == 'cifar100':
+        transform = utils.tribyol_test_transform
+        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
+        num_class = 100
+    elif args.dataset == 'stl10':
+        transform = utils.tribyol_test_transform
+        train_data = STL10(root='./data', split='train', transform=transform, download=True)
+        test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10
 
     train_loader = DataLoader(train_data, batch_size=batch_size,

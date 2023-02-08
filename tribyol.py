@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    model_name = 'tribyol_original_{}'.format(args.seed)
+    model_name = 'tribyol_momentum_{}'.format(args.seed)
 
     result_path = f'{args.dataset}/results_tribyol_batch{batch_size}/'
     if not os.path.exists(result_path):
@@ -39,14 +39,22 @@ if __name__ == '__main__':
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        import sys
-        sys.exit()
+        # import sys
+        # sys.exit()
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Triplet(root='./data', train=True, transform=train_transform, download=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    elif args.dataset == 'cifar100':
+        train_transform = utils.tribyol_transform
+        train_data = utils.CIFAR100Triplet(root='./data', train=True, transform=train_transform, download=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    elif args.dataset == 'stl10':
+        train_transform = utils.tribyol_transform
+        train_data = utils.STL10Triplet(root='./data', split='train+unlabeled', transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     results = {'train_loss': []}
