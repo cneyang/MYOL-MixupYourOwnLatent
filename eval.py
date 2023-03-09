@@ -86,8 +86,8 @@ if __name__ == '__main__':
 
     if os.path.exists(result_path):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
 
     if args.dataset == 'cifar10':
         transform = utils.tribyol_test_transform

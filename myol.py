@@ -36,7 +36,7 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_original_alpha{}_{}'.format(args.alpha, args.seed)
+        model_name = 'myol_beta{}_alpha{}_{}'.format(args.beta, args.alpha, args.seed)
     else:
         model_name = 'byol_{}'.format(args.seed)
 
@@ -56,15 +56,15 @@ if __name__ == '__main__':
     if args.dataset == 'cifar10':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
     elif args.dataset == 'cifar100':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
     elif args.dataset == 'stl10':
         train_transform = utils.tribyol_transform
         train_data = utils.STL10Pair(root='./data', split='train+unlabeled', transform=train_transform, download=True)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
 
     results = {'train_loss': [], 'mixup_loss': []}
     
