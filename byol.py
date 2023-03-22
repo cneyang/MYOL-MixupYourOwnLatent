@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms as T
+import numpy as np
 
 from functools import wraps
 import copy
@@ -238,6 +239,7 @@ class BYOL(nn.Module):
         x2=None,
         return_embedding = False,
         return_projection = True,
+        myol=False
     ):
         assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
 
@@ -255,6 +257,18 @@ class BYOL(nn.Module):
         online_pred_one = self.online_predictor(online_proj_one)
         online_pred_two = self.online_predictor(online_proj_two)
 
+        if myol:
+            lam = np.random.beta(0.5, 0.5, size=x1.size(0))
+            lam = torch.from_numpy(lam).float().reshape(-1, 1, 1, 1).to(x1.device)
+            idx = torch.randperm(x1.size(0)).to(x1.device)
+            mixed_x = lam * x1 + (1 - lam) * x2[idx]
+            lam = lam.reshape(-1, 1)
+
+            mixed_proj, _ = self.online_encoder(mixed_x)
+            mixed_pred = self.online_predictor(mixed_proj)
+
+            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
+
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
             
@@ -263,10 +277,21 @@ class BYOL(nn.Module):
             target_proj_one.detach_()
             target_proj_two.detach_()
 
+            if myol:
+                target_mixed_proj, _ = target_encoder(mixed_x)
+                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
+
+
         loss_one = loss_fn(online_pred_one, target_proj_two.detach())
         loss_two = loss_fn(online_pred_two, target_proj_one.detach())
 
         loss = loss_one + loss_two
+
+        if myol:
+            projection_mixup = loss_fn(mixed_pred, target_proj.detach())
+            prediction_mixup = loss_fn(online_pred, target_mixed_proj.detach())
+            loss += projection_mixup + prediction_mixup
+
         return loss.mean()
 
 class MixupBYOL(BYOL):

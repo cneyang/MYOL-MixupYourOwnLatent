@@ -37,33 +37,6 @@ class FC(torch.nn.Module):
     def forward(self, x):
         return self.linear(x)
 
-def get_features_from_encoder(encoder, loader, device):
-    
-    x_train = []
-    y_train = []
-
-    # get the features from the pre-trained model
-    for i, (x, y) in tqdm(enumerate(loader), total=len(loader), desc='Saving features'):
-        with torch.no_grad():
-            x = x.to(device)
-            feature_vector = encoder(x)
-            x_train.extend(feature_vector.cpu())
-            y_train.extend(y.numpy())
-
-            
-    x_train = torch.stack(x_train)
-    y_train = torch.tensor(y_train)
-    return x_train, y_train
-
-def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
-
-    train = torch.utils.data.TensorDataset(X_train, y_train)
-    train_loader = torch.utils.data.DataLoader(train, batch_size=64, shuffle=True)
-
-    test = torch.utils.data.TensorDataset(X_test, y_test)
-    test_loader = torch.utils.data.DataLoader(test, batch_size=512, shuffle=False)
-    return train_loader, test_loader
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
@@ -75,11 +48,10 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=27407)
     args = parser.parse_args()
 
-    batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
 
     print(args.model_name, args.checkpoint)
-    if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+    if os.path.exists(f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
         print('Already done')
         import sys
         sys.exit()
@@ -91,43 +63,36 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
 
     if args.dataset == 'cifar10':
-        transform = utils.tribyol_test_transform
+        transform = utils.CIFAR10Pair.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'cifar100':
-        transform = utils.tribyol_test_transform
+        transform = utils.CIFAR100Pair.get_transform(train=False)
         train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
         num_class = 100
     elif args.dataset == 'stl10':
-        transform = utils.tribyol_test_transform
+        transform = utils.STL10Pair.get_transform(train=False)
         train_data = STL10(root='./data', split='train', transform=transform, download=True)
         test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10
 
-    train_loader = DataLoader(train_data, batch_size=batch_size,
+    train_loader = DataLoader(train_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
-    test_loader = DataLoader(test_data, batch_size=batch_size,
+    test_loader = DataLoader(test_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
+    model_path = f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
+    encoder.requires_grad_(False)
 
     fc = FC(num_class=num_class)
+    fc.linear.weight.data.normal_(0, 0.01)
+    fc.linear.bias.data.zero_()
     fc = fc.to(device)
-
-    encoder.eval()
-    x_train, y_train = get_features_from_encoder(encoder, train_loader, device)
-    x_test, y_test = get_features_from_encoder(encoder, test_loader, device)
-
-    if len(x_train.shape) > 2:
-        x_train = torch.mean(x_train, dim=[2, 3])
-        x_test = torch.mean(x_test, dim=[2, 3])
-
-    train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
 
     optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*len(train_loader), eta_min=0, last_epoch=-1)
@@ -137,13 +102,14 @@ if __name__ == '__main__':
     test_results = {'test_acc@1': [], 'test_acc@5': []}
     print('Training...')
     for epoch in range(1, args.epochs + 1):
-        for x, y in train_loader:
+        for x, y in tqdm(train_loader, desc=f'Epoch {epoch}/{args.epochs}', leave=False):
             x = x.to(device)
             y = y.to(device)
             
             # zero the parameter gradients
             optimizer.zero_grad()        
             
+            x = encoder(x)
             out = fc(x)
             loss = criterion(out, y)
             
@@ -157,6 +123,7 @@ if __name__ == '__main__':
                 x = x.to(device)
                 y = y.to(device)
 
+                x = encoder(x)
                 out = fc(x)
                 prediction = torch.argsort(out, dim=-1, descending=True)
                 total_num += y.size(0)
@@ -169,4 +136,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')

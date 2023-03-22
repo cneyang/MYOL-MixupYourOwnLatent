@@ -20,6 +20,25 @@ class GaussianBlur(object):
 class CIFAR10Pair(CIFAR10):
     """CIFAR10 Dataset."""
 
+    @staticmethod
+    def get_transform(train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(32),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.5),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            ])
+        else:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(32),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            ])
+
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
         img = Image.fromarray(img)
@@ -36,6 +55,25 @@ class CIFAR10Pair(CIFAR10):
 class CIFAR100Pair(CIFAR100):
     """CIFAR100 Dataset."""
 
+    @staticmethod
+    def get_transform(train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(32),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.5),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761])
+            ])
+        else:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(32),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761]),
+            ])
+
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
         img = Image.fromarray(img)
@@ -51,6 +89,25 @@ class CIFAR100Pair(CIFAR100):
 
 class STL10Pair(STL10):
     """STL10 Dataset."""
+
+    @staticmethod
+    def get_transform(train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(96),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.5),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2565, 0.2761])
+            ])
+        else:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(96),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2565, 0.2761]),
+            ])
 
     def __getitem__(self, index):
         img, target = self.data[index], int(self.labels[index])
@@ -119,7 +176,7 @@ class STL10Triplet(STL10):
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p=0.5),
+    transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.5),
     transforms.RandomGrayscale(p=0.2),
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])

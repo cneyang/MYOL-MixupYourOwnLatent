@@ -1,16 +1,14 @@
 import os
 import argparse
-from matplotlib.transforms import Transform
 import pandas as pd
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import numpy as np
-from byol import MixupBYOL
+from byol import BYOL
 
 import utils
-from mixup import mixup_data
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -20,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
+    parser.add_argument('--optim', default='adam', type=str, help='Optimizer')
     parser.add_argument('--alpha', default=0.5, type=float, help='mixup alpha')
     parser.add_argument('--beta', default=1.0, type=float, help='mixup weight')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
@@ -36,12 +34,12 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_beta{}_alpha{}_{}'.format(args.beta, args.alpha, args.seed)
+        model_name = 'myol_{}'.format(args.seed)
     else:
         model_name = 'byol_{}'.format(args.seed)
 
     algo = 'myol' if args.mixup else 'byol'
-    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
+    result_path = f'kcc/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -54,25 +52,25 @@ if __name__ == '__main__':
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
-        train_transform = utils.tribyol_transform
+        train_transform = utils.CIFAR10Pair.get_transform(train=True)
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
     elif args.dataset == 'cifar100':
-        train_transform = utils.tribyol_transform
+        train_transform = utils.CIFAR100Pair.get_transform(train=True)
         train_data = utils.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
     elif args.dataset == 'stl10':
-        train_transform = utils.tribyol_transform
+        train_transform = utils.STL10Pair.get_transform(train=True)
         train_data = utils.STL10Pair(root='./data', split='train+unlabeled', transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=12)
 
-    results = {'train_loss': [], 'mixup_loss': []}
+    results = {'train_loss': []}
     
     model = Model().cuda()
 
-    learner = MixupBYOL(
+    learner = BYOL(
         model.f,
-        image_size=96,
+        image_size=96 if args.dataset == 'stl10' else 32,
         hidden_layer=-2,
         projection_size=128,
         projection_hidden_size=512,
@@ -95,15 +93,8 @@ if __name__ == '__main__':
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            loss = learner(x1, x2)
+            loss = learner(x1, x2, myol=args.mixup)
             total_loss += loss.item() * batch_size
-
-            if args.mixup:
-                mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
-                mixed_x = mixed_x.detach()
-
-                mixup_loss = learner.mixup(mixed_x, x1, x2, lam) * args.beta
-                loss += mixup_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -112,15 +103,11 @@ if __name__ == '__main__':
             learner.update_moving_average()
 
             total_num += batch_size
-            total_mixup_loss = mixup_loss.item() * batch_size if args.mixup else 0
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num))
         train_loss = total_loss / total_num
-        mixup_loss = total_mixup_loss / total_num
 
         writer.add_scalar('train_loss', train_loss, epoch)
-        writer.add_scalar('mixup_loss', mixup_loss, epoch)
         results['train_loss'].append(train_loss)
-        results['mixup_loss'].append(mixup_loss)
         
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
