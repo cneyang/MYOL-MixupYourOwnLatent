@@ -6,7 +6,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import numpy as np
-from byol import BYOL
+from byol import BYOL, MixupBYOL
+from mixup import mixup_data
 
 import utils
 from model import get_model
@@ -26,6 +27,8 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     batch_size, epochs = args.batch_size, args.epochs
     
@@ -59,7 +62,7 @@ if __name__ == '__main__':
     
     model = get_model(num_classes).cuda()
 
-    learner = BYOL(
+    learner = MixupBYOL(
         model,
         image_size=32,
         hidden_layer=-2,
@@ -80,7 +83,19 @@ if __name__ == '__main__':
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            loss, byol_loss, mixup_loss = learner(x1, x2, args.mixup)
+            # loss, byol_loss, mixup_loss = learner(x1, x2, args.mixup)
+            loss = learner(x1, x2)
+
+            if args.mixup:
+                mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
+                mixed_x = mixed_x.detach()
+
+                mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
+
+            total_loss += loss.item() * batch_size
+            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
+
+            loss = loss + mixup_loss if args.mixup else loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -89,8 +104,6 @@ if __name__ == '__main__':
             learner.update_moving_average()
 
             total_num += batch_size
-            total_loss += loss.item() * batch_size
-            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
 
             data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
