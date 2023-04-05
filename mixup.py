@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 
+@torch.no_grad()
 def mixup_data(x1, x2, y=None, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:

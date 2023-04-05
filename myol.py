@@ -88,7 +88,6 @@ if __name__ == '__main__':
 
             if args.mixup:
                 mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
-                mixed_x = mixed_x.detach()
 
                 mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
 
