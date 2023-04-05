@@ -72,7 +72,7 @@ if __name__ == '__main__':
     
     for epoch in range(1, epochs + 1):
         # train
-        total_loss, total_num = 0, 0
+        total_loss, total_mixup_loss, total_num = 0, 0, 0
         data_bar = tqdm(train_loader)
 
         learner.train()
@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
             total_num += batch_size
             total_loss += loss.item() * batch_size
-            total_mixup_loss = mixup_loss.item() * batch_size if args.mixup else 0
+            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
 
             data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
