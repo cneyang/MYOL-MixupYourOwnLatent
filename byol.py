@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms as T
+import numpy as np
 
 from functools import wraps
 import copy
@@ -172,35 +173,11 @@ class BYOL(nn.Module):
         hidden_layer = -2,
         projection_size = 256,
         projection_hidden_size = 4096,
-        augment_fn = None,
-        augment_fn2 = None,
         moving_average_decay = 0.99,
         use_momentum = True
     ):
         super().__init__()
         self.net = net
-
-        # default SimCLR augmentation
-
-        DEFAULT_AUG = torch.nn.Sequential(
-            RandomApply(
-                T.ColorJitter(0.8, 0.8, 0.8, 0.2),
-                p = 0.3
-            ),
-            T.RandomGrayscale(p=0.2),
-            T.RandomHorizontalFlip(),
-            RandomApply(
-                T.GaussianBlur((3, 3), (1.0, 2.0)),
-                p = 0.2
-            ),
-            T.RandomResizedCrop((image_size, image_size)),
-            T.Normalize(
-                mean=torch.tensor([0.485, 0.456, 0.406]),
-                std=torch.tensor([0.229, 0.224, 0.225])),
-        )
-
-        self.augment1 = default(augment_fn, DEFAULT_AUG)
-        self.augment2 = default(augment_fn2, self.augment1)
 
         self.online_encoder = NetWrapper(net, projection_size, projection_hidden_size, layer=hidden_layer)
 
@@ -215,7 +192,8 @@ class BYOL(nn.Module):
         self.to(device)
 
         # send a mock image tensor to instantiate singleton parameters
-        self.forward(torch.randn(2, 3, image_size, image_size, device=device))
+        with torch.no_grad():
+            self.forward(torch.randn(2, 3, image_size, image_size, device=device), torch.randn(2, 3, image_size, image_size, device=device))
 
     @singleton('target_encoder')
     def _get_target_encoder(self):
@@ -235,7 +213,8 @@ class BYOL(nn.Module):
     def forward(
         self,
         x1,
-        x2=None,
+        x2,
+        mixup = False,
         return_embedding = False,
         return_projection = True,
     ):
@@ -244,173 +223,44 @@ class BYOL(nn.Module):
         if return_embedding:
             return self.online_encoder(x1, return_projection = return_projection)
 
-        if x2 is not None:
-            image_one, image_two = x1, x2
-        else:
-            image_one, image_two = self.augment1(x1), self.augment2(x1)
-
-        online_proj_one, _ = self.online_encoder(image_one)
-        online_proj_two, _ = self.online_encoder(image_two)
+        online_proj_one, _ = self.online_encoder(x1)
+        online_proj_two, _ = self.online_encoder(x2)
 
         online_pred_one = self.online_predictor(online_proj_one)
         online_pred_two = self.online_predictor(online_proj_two)
 
+        if mixup:
+            lam = np.random.beta(1.0, 1.0, size=x1.size(0))
+            lam = torch.from_numpy(lam).float().reshape(-1, 1, 1, 1).to(x1.device)
+            idx = torch.randperm(x1.size(0)).to(x1.device)
+            mixed_x = lam * x1 + (1 - lam) * x2[idx]
+            lam = lam.reshape(-1, 1)
+
+            mixed_proj, _ = self.online_encoder(mixed_x)
+            mixed_pred = self.online_predictor(mixed_proj)
+
+            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
+
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
             
-            target_proj_one, _ = target_encoder(image_one)
-            target_proj_two, _ = target_encoder(image_two)
-            target_proj_one.detach_()
-            target_proj_two.detach_()
+            target_proj_one, _ = target_encoder(x1)
+            target_proj_two, _ = target_encoder(x2)
+
+            if mixup:
+                target_mixed_proj, _ = target_encoder(mixed_x)
+                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
 
         loss_one = loss_fn(online_pred_one, target_proj_two.detach())
         loss_two = loss_fn(online_pred_two, target_proj_one.detach())
+        byol_loss = (loss_one + loss_two).mean()
 
-        loss = loss_one + loss_two
-        return loss.mean()
-
-class MixupBYOL(BYOL):
-    def __init__(
-        self,
-        net,
-        image_size,
-        hidden_layer = -2,
-        projection_size = 256,
-        projection_hidden_size = 4096,
-        augment_fn = None,
-        augment_fn2 = None,
-        moving_average_decay = 0.99,
-        use_momentum = True
-    ):
-        super().__init__(
-            net,
-            image_size,
-            hidden_layer,
-            projection_size,
-            projection_hidden_size,
-            augment_fn,
-            augment_fn2,
-            moving_average_decay,
-            use_momentum
-        )
-
-    def mixup(self, mixed_x, x1, x2, lam):
-        mixed_proj, _ = self.online_encoder(mixed_x)
-        online_proj_one, _ = self.online_encoder(x1)
-        online_proj_two, _ = self.online_encoder(x2)
-        mixed_pred = self.online_predictor(mixed_proj)
-        online_pred_one = self.online_predictor(online_proj_one)
-        online_pred_two = self.online_predictor(online_proj_two)
-        online_pred = lam * online_pred_one + (1 - lam) * online_pred_two
-
-        with torch.no_grad():
-            target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
-            target_mixed_proj, _ = target_encoder(mixed_x)
-            target_proj_one, _ = target_encoder(x1)
-            target_proj_two, _ = target_encoder(x2)
-            target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
-            
-            target_mixed_proj = target_mixed_proj.detach()
-            target_proj = target_proj.detach()
-
-        # prediction mixup
-        loss_one = loss_fn(mixed_pred, target_proj)
-        # projection mixup
-        loss_two = loss_fn(online_pred, target_mixed_proj)
-        loss = loss_one + loss_two
-        return loss.mean()
-
-class TriBYOL(BYOL):
-    def __init__(
-        self,
-        net,
-        image_size,
-        hidden_layer = -2,
-        projection_size = 256,
-        projection_hidden_size = 4096,
-        augment_fn = None,
-        augment_fn2 = None,
-        moving_average_decay = 0.99,
-        use_momentum = True
-    ):
-        super().__init__(
-            net,
-            image_size,
-            hidden_layer,
-            projection_size,
-            projection_hidden_size,
-            augment_fn,
-            augment_fn2,
-            moving_average_decay,
-            use_momentum
-        )
-
-        self.update_target_one = True
-        self.target_encoder = None
-
-    @singleton('target_encoder')
-    def _get_target_encoder(self):
-        target_encoder_one = copy.deepcopy(self.online_encoder)
-        target_encoder_two = copy.deepcopy(self.online_encoder)
-        set_requires_grad(target_encoder_one, False)
-        set_requires_grad(target_encoder_two, False)
-        return target_encoder_one, target_encoder_two
-
-    def reset_moving_average(self):
-        del self.target_encoder
-        self.target_encoder = None
-
-    def update_moving_average(self):
-        assert self.use_momentum, 'you do not need to update the moving average, since you have turned off momentum for the target encoder'
-        assert self.target_encoder is not None, 'target encoder has not been created yet'
-        if self.update_target_one:
-            update_moving_average(self.target_ema_updater, self.target_encoder[0], self.online_encoder)
-            self.update_target_one = False
+        if mixup:
+            projection_mixup = loss_fn(mixed_pred, target_proj.detach())
+            prediction_mixup = loss_fn(online_pred, target_mixed_proj.detach())
+            mixup_loss = (projection_mixup + prediction_mixup).mean()
         else:
-            update_moving_average(self.target_ema_updater, self.target_encoder[1], self.online_encoder)
-            self.update_target_one = True
+            mixup_loss = 0
 
-    def forward(
-        self,
-        x1,
-        x2=None,
-        x3=None,
-        return_embedding = False,
-        return_projection = True,
-    ): 
-        assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
-
-        if return_embedding:
-            return self.online_encoder(x1, return_projection = return_projection)
-
-        if x2 is not None:
-            image_one, image_two, image_three = x1, x2, x3
-        else:
-            image_one, image_two, image_three = self.augment1(x1), self.augment2(x1), self.augment2(x1)
-
-        online_proj_one, _ = self.online_encoder(image_one)
-        online_proj_two, _ = self.online_encoder(image_two)
-        online_proj_three, _ = self.online_encoder(image_three)
-        online_pred_one = self.online_predictor(online_proj_one)
-        online_pred_two = self.online_predictor(online_proj_two)
-        online_pred_three = self.online_predictor(online_proj_three)
-
-        with torch.no_grad():
-            target_encoder_one, target_encoder_two = self._get_target_encoder() if self.use_momentum else self.online_encoder
-            target_one_proj_two, _ = target_encoder_one(image_two)
-            target_one_proj_one, _ = target_encoder_one(image_one)
-            target_two_proj_three, _ = target_encoder_two(image_three)
-            target_two_proj_one, _ = target_encoder_two(image_one)
-
-            target_one_proj_two.detach_()
-            target_one_proj_one.detach_()
-            target_two_proj_three.detach_()
-            target_two_proj_one.detach_()
-
-        loss_one_two = loss_fn(online_pred_one, target_one_proj_two.detach())
-        loss_two_one = loss_fn(online_pred_two, target_one_proj_one.detach())
-        loss_one_three = loss_fn(online_pred_one, target_two_proj_three.detach())
-        loss_three_one = loss_fn(online_pred_three, target_two_proj_one.detach())
-
-        loss = (loss_one_two + loss_two_one) / 2 + (loss_one_three + loss_three_one) / 2
-        return loss.mean()
+        loss = byol_loss + mixup_loss
+        return loss, byol_loss, mixup_loss
