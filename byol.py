@@ -4,6 +4,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms as T
+import numpy as np
+from mixup import mixup_data
 
 from functools import wraps
 import copy
@@ -138,7 +140,7 @@ class NetWrapper(nn.Module):
             self._register_hook()
 
         self.hidden.clear()
-        _ = self.net(x)
+        representation = self.net(x)
         hidden = self.hidden[x.device]
         self.hidden.clear()
 
@@ -154,6 +156,11 @@ class NetWrapper(nn.Module):
 
         if not return_projection:
             return representation
+        
+        # idx = torch.randperm(x.size(0))
+        # print("output perm", self.net(x)[idx])
+        # print("input perm", self.net(x[idx]))
+        # self.hidden.clear()
 
         projector = self._get_projector(representation)
         projection = projector(representation)
@@ -215,7 +222,8 @@ class BYOL(nn.Module):
         self.to(device)
 
         # send a mock image tensor to instantiate singleton parameters
-        self.forward(torch.randn(2, 3, image_size, image_size, device=device))
+        with torch.no_grad():
+            self.forward(torch.randn(2, 3, image_size, image_size, device=device))
 
     @singleton('target_encoder')
     def _get_target_encoder(self):
@@ -236,6 +244,7 @@ class BYOL(nn.Module):
         self,
         x1,
         x2=None,
+        mixup=False,
         return_embedding = False,
         return_projection = True,
     ):
@@ -244,13 +253,11 @@ class BYOL(nn.Module):
         if return_embedding:
             return self.online_encoder(x1, return_projection = return_projection)
 
-        if x2 is not None:
-            image_one, image_two = x1, x2
-        else:
-            image_one, image_two = self.augment1(x1), self.augment2(x1)
+        if x2 is None:
+            x1, x2 = self.augment1(x1), self.augment2(x1)
 
-        online_proj_one, _ = self.online_encoder(image_one)
-        online_proj_two, _ = self.online_encoder(image_two)
+        online_proj_one, _ = self.online_encoder(x1)
+        online_proj_two, _ = self.online_encoder(x2)
 
         online_pred_one = self.online_predictor(online_proj_one)
         online_pred_two = self.online_predictor(online_proj_two)
@@ -258,16 +265,53 @@ class BYOL(nn.Module):
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
             
-            target_proj_one, _ = target_encoder(image_one)
-            target_proj_two, _ = target_encoder(image_two)
-            target_proj_one.detach_()
-            target_proj_two.detach_()
+            target_proj_one, _ = target_encoder(x1)
+            target_proj_two, _ = target_encoder(x2)
 
         loss_one = loss_fn(online_pred_one, target_proj_two)
         loss_two = loss_fn(online_pred_two, target_proj_one)
 
-        loss = loss_one + loss_two
-        return loss.mean()
+        byol_loss = (loss_one + loss_two).mean()
+        print("byol loss: ", byol_loss.item())
+
+        if mixup:
+            lam = np.random.beta(1.0, 1.0, size=x1.size(0))
+            lam = torch.FloatTensor(lam).reshape(-1, 1, 1, 1).cuda()
+            idx = torch.randperm(x1.size(0)).cuda()
+
+            mixed_x = lam * x1 + (1 - lam) * x2[idx]
+            # x2 = x2[idx]
+            lam = lam.reshape(-1, 1)
+            # mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=1.0)
+
+            mixed_proj, _ = self.online_encoder(mixed_x)
+            online_proj_one, _ = self.online_encoder(x1)
+            online_proj_two, _ = self.online_encoder(x2[idx])
+            mixed_pred = self.online_predictor(mixed_proj)
+            online_pred_one = self.online_predictor(online_proj_one)
+            online_pred_two = self.online_predictor(online_proj_two)
+            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two
+
+            with torch.no_grad():
+                target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
+                
+                target_mixed_proj, _ = target_encoder(mixed_x)
+                target_proj_one, _ = target_encoder(x1)
+                target_proj_two, _ = target_encoder(x2[idx])
+                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
+                
+            # prediction mixup
+            loss_one = loss_fn(mixed_pred, target_proj)
+            # projection mixup
+            loss_two = loss_fn(online_pred, target_mixed_proj)
+            mixup_loss = (loss_one + loss_two).mean()
+            print("mixup loss: ", mixup_loss.item())
+        else:
+            mixup_loss = 0
+
+        loss = byol_loss + mixup_loss
+
+        return loss#, byol_loss, mixup_loss
 
 class MixupBYOL(BYOL):
     def __init__(
@@ -305,20 +349,19 @@ class MixupBYOL(BYOL):
 
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
+            
             target_mixed_proj, _ = target_encoder(mixed_x)
             target_proj_one, _ = target_encoder(x1)
             target_proj_two, _ = target_encoder(x2)
             target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
             
-            target_mixed_proj = target_mixed_proj.detach()
-            target_proj = target_proj.detach()
-
         # prediction mixup
         loss_one = loss_fn(mixed_pred, target_proj)
         # projection mixup
         loss_two = loss_fn(online_pred, target_mixed_proj)
-        loss = loss_one + loss_two
-        return loss.mean()
+        loss = (loss_one + loss_two).mean()
+        print("mixup loss: ", loss.item())
+        return loss
 
 class TriBYOL(BYOL):
     def __init__(

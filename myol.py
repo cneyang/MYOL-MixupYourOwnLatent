@@ -32,7 +32,7 @@ if __name__ == '__main__':
         model_name = 'byol_{}_{}'.format(args.seed)
 
     algo = 'myol' if args.mixup else 'byol'
-    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
+    result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -74,32 +74,37 @@ if __name__ == '__main__':
     for epoch in range(1, epochs + 1):
         # train
         total_loss, total_num = 0, 0
+        total_mixup_loss = 0
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, _ in data_bar:
+        for i, (x1, x2, _) in enumerate(train_loader):
+            print(i)
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            loss = learner(x1, x2)
+            # loss = learner(x1, x2)
+            loss = learner(x1, x2, mixup=args.mixup)
             total_loss += loss.item() * batch_size
 
-            if args.mixup:
-                mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
-                mixed_x = mixed_x.detach()
+            # if args.mixup:
+            #     mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
 
-                mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
-                loss += mixup_loss
+            #     mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
+            #     loss += mixup_loss
+
+            # loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
 
             optimizer.zero_grad()
             loss.backward()
+            # mixup_loss.backward()
             optimizer.step()
 
             learner.update_moving_average()
 
             total_num += batch_size
-            total_mixup_loss = mixup_loss.item() * batch_size if args.mixup else 0
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            # total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
+            # data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
         mixup_loss = total_mixup_loss / total_num
 
@@ -108,9 +113,9 @@ if __name__ == '__main__':
         results['train_loss'].append(train_loss)
         results['mixup_loss'].append(mixup_loss)
         
-        # save statistics
-        data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
+        # # save statistics
+        # data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
+        # data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
 
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
+        # if epoch % 10 == 0:
+        #     torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
