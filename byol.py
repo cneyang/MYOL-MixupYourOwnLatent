@@ -155,6 +155,12 @@ class NetWrapper(nn.Module):
 
         if not return_projection:
             return representation
+        
+        idx = torch.randperm(x.shape[0])
+        print("idx", idx)
+        print("output indexing", representation[idx])
+        print("input indexing", self.get_representation(x[idx]))
+        self.hidden.clear()
 
         projector = self._get_projector(representation)
         projection = projector(representation)
