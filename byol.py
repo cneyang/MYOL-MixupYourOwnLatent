@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms as T
+import numpy as np
 
 from functools import wraps
 import copy
@@ -236,6 +237,7 @@ class BYOL(nn.Module):
         self,
         x1,
         x2=None,
+        mixup = False,
         return_embedding = False,
         return_projection = True,
     ):
@@ -244,13 +246,11 @@ class BYOL(nn.Module):
         if return_embedding:
             return self.online_encoder(x1, return_projection = return_projection)
 
-        if x2 is not None:
-            image_one, image_two = x1, x2
-        else:
-            image_one, image_two = self.augment1(x1), self.augment2(x1)
+        if x2 is None:
+            x1, x2 = self.augment1(x1), self.augment2(x1)
 
-        online_proj_one, _ = self.online_encoder(image_one)
-        online_proj_two, _ = self.online_encoder(image_two)
+        online_proj_one, _ = self.online_encoder(x1)
+        online_proj_two, _ = self.online_encoder(x2)
 
         online_pred_one = self.online_predictor(online_proj_one)
         online_pred_two = self.online_predictor(online_proj_two)
@@ -258,16 +258,36 @@ class BYOL(nn.Module):
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
             
-            target_proj_one, _ = target_encoder(image_one)
-            target_proj_two, _ = target_encoder(image_two)
-            target_proj_one.detach_()
-            target_proj_two.detach_()
+            target_proj_one, _ = target_encoder(x1)
+            target_proj_two, _ = target_encoder(x2)
 
         loss_one = loss_fn(online_pred_one, target_proj_two)
         loss_two = loss_fn(online_pred_two, target_proj_one)
 
-        loss = loss_one + loss_two
-        return loss.mean()
+        byol_loss = (loss_one + loss_two).mean()
+
+        if mixup:
+            lam = np.random.beta(1.0, 1.0, size=x1.size(0))
+            lam = torch.from_numpy(lam).reshape(-1, 1, 1, 1).float().to(x1.device)
+            idx = torch.randperm(x1.size(0)).to(x1.device)
+            mixed_x = lam * x1 + (1 - lam) * x2[idx]
+
+            mixed_proj, _ = self.online_encoder(mixed_x)
+            mixed_pred = self.online_predictor(mixed_proj)
+            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
+
+            with torch.no_grad():
+                target_mixed_proj, _ = target_encoder(mixed_x)
+                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
+
+            loss_one = loss_fn(mixed_pred, target_proj)
+            loss_two = loss_fn(online_pred, target_mixed_proj)
+            mixup_loss = (loss_one + loss_two).mean()
+        else:
+            mixup_loss = 0
+
+        loss = byol_loss + mixup_loss
+        return loss, byol_loss, mixup_loss
 
 class MixupBYOL(BYOL):
     def __init__(

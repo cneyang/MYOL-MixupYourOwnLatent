@@ -32,21 +32,21 @@ if __name__ == '__main__':
         model_name = 'byol_{}_{}'.format(args.seed)
 
     algo = 'myol' if args.mixup else 'byol'
-    result_path = f'{args.dataset}/results_{algo}_batch{batch_size}/'
+    result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
@@ -74,6 +74,7 @@ if __name__ == '__main__':
     for epoch in range(1, epochs + 1):
         # train
         total_loss, total_num = 0, 0
+        total_mixup_loss = 0
         data_bar = tqdm(train_loader)
 
         learner.train()
@@ -81,24 +82,19 @@ if __name__ == '__main__':
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            loss = learner(x1, x2)
-            total_loss += loss.item() * batch_size
-
-            if args.mixup:
-                mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
-                mixed_x = mixed_x.detach()
-
-                mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
-                loss += mixup_loss
+            loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
+            total_loss += byol_loss.item() * batch_size
 
             optimizer.zero_grad()
             loss.backward()
+            # byol_loss.backward(retain_graph=True)
+            # mixup_loss.backward()
             optimizer.step()
 
             learner.update_moving_average()
 
             total_num += batch_size
-            total_mixup_loss = mixup_loss.item() * batch_size if args.mixup else 0
+            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
             data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
         mixup_loss = total_mixup_loss / total_num
