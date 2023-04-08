@@ -19,19 +19,17 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--single_forward', action='store_true', help='Use single forward pass')
+    parser.add_argument('--double_forward', action='store_true', help='Use double forward pass')
+    parser.add_argument('--double_backward', action='store_true', help='Use double backward pass')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     
-    if args.mixup:
-        model_name = 'myol_alpha{}_{}'.format(args.alpha, args.seed)
-    else:
-        model_name = 'byol_{}_{}'.format(args.seed)
-
     algo = 'myol' if args.mixup else 'byol'
+    model_name = f'{algo}_{args.seed}'
     result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -45,18 +43,18 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     
-    writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
+    writer = SummaryWriter('runs/' + f'test/{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
         train_transform = utils.tribyol_transform
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
-    results = {'train_loss': [], 'mixup_loss': []}#, 'valid_loss':[]}
-    
+    results = {'train_loss': [], 'mixup_loss': []}
+
     model = Model().cuda()
 
     learner = MixupBYOL(
@@ -78,24 +76,35 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, _ in data_bar:
+        for i, (x1, x2, _) in enumerate(train_loader):
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
+            if args.single_forward:
+                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
+            elif args.double_forward:
+                loss, byol_loss, mixup_loss = learner(x1, x2)
+                if args.mixup:
+                    mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=1.0)
+                    mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
+
+            total_num += batch_size
             total_loss += byol_loss.item() * batch_size
+            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
 
             optimizer.zero_grad()
-            loss.backward()
-            # byol_loss.backward(retain_graph=True)
-            # mixup_loss.backward()
+            if args.double_backward:
+                byol_loss.backward(retain_graph=args.single_forward)
+                mixup_loss.backward()
+            else:
+                loss.backward()
             optimizer.step()
+
+            print(f'Batch: {i+1}/{len(train_loader)} Loss: {byol_loss.item():.4f} Mixup Loss: {mixup_loss.item():.4f}')
 
             learner.update_moving_average()
 
-            total_num += batch_size
-            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            # data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
         mixup_loss = total_mixup_loss / total_num
 

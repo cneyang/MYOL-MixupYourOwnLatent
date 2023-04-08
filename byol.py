@@ -330,9 +330,6 @@ class MixupBYOL(BYOL):
             target_proj_two, _ = target_encoder(x2)
             target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
             
-            target_mixed_proj = target_mixed_proj.detach()
-            target_proj = target_proj.detach()
-
         # prediction mixup
         loss_one = loss_fn(mixed_pred, target_proj)
         # projection mixup
