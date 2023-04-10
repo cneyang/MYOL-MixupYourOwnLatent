@@ -85,8 +85,7 @@ if __name__ == '__main__':
             elif args.double_forward:
                 loss, byol_loss, mixup_loss = learner(x1, x2)
                 if args.mixup:
-                    mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=1.0)
-                    mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
+                    mixup_loss = learner.mixup(x1, x2)
 
             total_num += batch_size
             total_loss += byol_loss.item() * batch_size

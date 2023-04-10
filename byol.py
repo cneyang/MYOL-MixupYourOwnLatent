@@ -315,7 +315,12 @@ class MixupBYOL(BYOL):
             use_momentum
         )
 
-    def mixup(self, mixed_x, x1, x2, lam):
+    def mixup(self, x1, x2):
+        lam = np.random.beta(1.0, 1.0, size=x1.size(0))
+        idx = torch.randperm(x1.size(0)).to(x1.device)
+        lam = torch.FloatTensor(lam).reshape(-1, 1, 1, 1).to(x1.device)
+        mixed_x = lam * x1 + (1 - lam) * x2[idx]
+
         online_proj_one, _ = self.online_encoder(x1)
         online_proj_two, _ = self.online_encoder(x2)
 
@@ -325,7 +330,7 @@ class MixupBYOL(BYOL):
         mixed_proj, _ = self.online_encoder(mixed_x)
         mixed_pred = self.online_predictor(mixed_proj)
 
-        online_pred = lam * online_pred_one + (1 - lam) * online_pred_two
+        online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
 
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
@@ -335,7 +340,7 @@ class MixupBYOL(BYOL):
 
             target_mixed_proj, _ = target_encoder(mixed_x)
 
-            target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
+            target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
             
         # prediction mixup
         loss_one = loss_fn(mixed_pred, target_proj.detach())
