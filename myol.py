@@ -29,8 +29,10 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     algo = 'myol' if args.mixup else 'byol'
-    model_name = f'{algo}_{args.seed}'
-    result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
+    forward = 'single_forward' if args.single_forward else 'double_forward' if args.double_forward else 'double_backward'
+    backward = 'double_backward' if args.double_backward else 'single_backward'
+    model_name = f'{algo}_{forward}_{backward}_{args.seed}'
+    result_path = f'test/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -76,7 +78,7 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for i, (x1, x2, _) in enumerate(train_loader):
+        for x1, x2, _ in data_bar:
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
@@ -99,11 +101,11 @@ if __name__ == '__main__':
                 loss.backward()
             optimizer.step()
 
-            print(f'Batch: {i+1}/{len(train_loader)} Loss: {byol_loss.item():.4f} Mixup Loss: {mixup_loss.item():.4f}')
+            # print(f'Batch: {i+1}/{len(train_loader)} Loss: {byol_loss.item():.4f} Mixup Loss: {mixup_loss.item():.4f}')
 
             learner.update_moving_average()
 
-            # data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
         mixup_loss = total_mixup_loss / total_num
 
