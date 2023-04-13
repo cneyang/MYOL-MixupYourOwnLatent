@@ -10,7 +10,7 @@ class CIFAR10Pair(CIFAR10):
     def get_transform(train):
         if train:
             return transforms.Compose([
-                transforms.RandomResizedCrop(32),
+                transforms.RandomResizedCrop(32, scale=(0.2, 1.)),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
                 transforms.RandomGrayscale(p=0.2),
@@ -44,7 +44,7 @@ class CIFAR100Pair(CIFAR100):
     def get_transform(train):
         if train:
             return transforms.Compose([
-                transforms.RandomResizedCrop(32),
+                transforms.RandomResizedCrop(32, scale=(0.2, 1.)),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
                 transforms.RandomGrayscale(p=0.2),
