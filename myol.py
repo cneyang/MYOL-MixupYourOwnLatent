@@ -20,18 +20,14 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=100, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
-    parser.add_argument('--single_forward', action='store_true', help='Use single forward pass')
-    parser.add_argument('--double_forward', action='store_true', help='Use double forward pass')
-    parser.add_argument('--double_backward', action='store_true', help='Use double backward pass')
+    parser.add_argument('--n_steps', default=2, type=int, help='Number of byol steps per mixup step')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     
     algo = 'myol' if args.mixup else 'byol'
-    forward = 'single_forward' if args.single_forward else 'double_forward' if args.double_forward else 'double_backward'
-    backward = 'double_backward' if args.double_backward else 'single_backward'
-    model_name = f'{algo}_{forward}_{backward}_{args.seed}'
+    model_name = f'{algo}_{args.n_steps}steps_{args.seed}'
     result_path = f'test/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -69,6 +65,7 @@ if __name__ == '__main__':
     )
 
     optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
@@ -78,36 +75,30 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, _ in data_bar:
+        for i, (x1, x2, _) in enumerate(data_bar):
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            if args.single_forward:
-                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
-            elif args.double_forward:
-                loss, byol_loss, mixup_loss = learner(x1, x2)
-                if args.mixup:
-                    mixup_loss = learner.mixup(x1, x2)
+            mixup = args.mixup and (i % args.n_steps == 0)
+            with torch.cuda.amp.autocast():
+                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=mixup)
 
             total_num += batch_size
             total_loss += byol_loss.item() * batch_size
-            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
+            total_mixup_loss += mixup_loss.item() * batch_size if mixup else 0
 
             optimizer.zero_grad()
-            if args.double_backward:
-                byol_loss.backward(retain_graph=args.single_forward)
-                mixup_loss.backward()
-            else:
-                loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             # print(f'Batch: {i+1}/{len(train_loader)} Loss: {byol_loss.item():.4f} Mixup Loss: {mixup_loss.item():.4f}')
 
             learner.update_moving_average()
 
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / (total_num / args.n_steps)))
         train_loss = total_loss / total_num
-        mixup_loss = total_mixup_loss / total_num
+        mixup_loss = total_mixup_loss / (total_num / args.n_steps)
 
         writer.add_scalar('train_loss', train_loss, epoch)
         writer.add_scalar('mixup_loss', mixup_loss, epoch)
