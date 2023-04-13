@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, STL10, Flowers102, FGVCAircraft
+from torchvision.datasets import CIFAR10, CIFAR100
 
 import os
 import argparse
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn import preprocessing
 
 import utils
 from model import Model
@@ -76,11 +75,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=27407)
     args = parser.parse_args()
 
-    batch_size = 512
-    checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
-
     print(args.model_name, args.checkpoint)
-    if os.path.exists(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+    if os.path.exists(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv'):
         print('Already done')
         import sys
         sys.exit()
@@ -88,28 +84,28 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     if args.dataset == 'cifar10':
-        transform = utils.test_transform
+        transform = utils.CIFAR10Pair.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
-    elif args.dataset == 'stl10':
-        transform = utils.test_transform
-        train_data = STL10(root='./data', split='train', transform=transform, download=True)
-        test_data = STL10(root='./data', split='test', transform=transform, download=True)
-        num_class = 10
+    elif args.dataset == 'cifar100':
+        transform = utils.CIFAR100Pair.get_transform(train=False)
+        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
+        num_class = 100
 
-    train_loader = DataLoader(train_data, batch_size=batch_size,
+    train_loader = DataLoader(train_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
-    test_loader = DataLoader(test_data, batch_size=batch_size,
+    test_loader = DataLoader(test_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
+    model_path = f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}_{args.checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -165,4 +161,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv', index_label='epoch')

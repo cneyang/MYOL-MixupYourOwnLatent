@@ -6,13 +6,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import numpy as np
-from byol import MixupBYOL
+from byol import BYOL
 
 import utils
-from mixup import mixup_data
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     algo = 'myol' if args.mixup else 'byol'
-    model_name = f'{algo}_{args.n_steps}steps_{args.seed}'
+    model_name = f'{algo}_{args.seed}'
     result_path = f'test/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
@@ -47,15 +47,19 @@ if __name__ == '__main__':
     writer = SummaryWriter('runs/' + f'test/{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
-        train_transform = utils.tribyol_transform
+        train_transform = utils.CIFAR10Pair.get_transform(train=True)
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    elif args.dataset == 'cifar100':
+        train_transform = utils.CIFAR100Pair.get_transform(train=True)
+        train_data = utils.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': [], 'mixup_loss': []}
 
     model = Model().cuda()
 
-    learner = MixupBYOL(
+    learner = BYOL(
         model.f,
         image_size=32,
         hidden_layer=-2,
@@ -91,8 +95,6 @@ if __name__ == '__main__':
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-
-            # print(f'Batch: {i+1}/{len(train_loader)} Loss: {byol_loss.item():.4f} Mixup Loss: {mixup_loss.item():.4f}')
 
             learner.update_moving_average()
 
