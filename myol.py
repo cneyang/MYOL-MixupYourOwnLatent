@@ -28,7 +28,7 @@ if __name__ == '__main__':
     
     algo = 'myol' if args.mixup else 'byol'
     model_name = f'{algo}_{args.seed}'
-    result_path = f'test/{args.dataset}/results_{algo}_batch{batch_size}/'
+    result_path = f'kcc/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 

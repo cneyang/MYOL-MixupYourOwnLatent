@@ -76,7 +76,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     print(args.model_name, args.checkpoint)
-    if os.path.exists(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv'):
+    if os.path.exists(f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv'):
         print('Already done')
         import sys
         sys.exit()
@@ -105,7 +105,7 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}_{args.checkpoint}.pth'
+    model_path = f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}_{args.checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -161,4 +161,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'test/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'kcc/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics_{args.checkpoint}.csv', index_label='epoch')
