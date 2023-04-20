@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, STL10, Flowers102, FGVCAircraft
+from torchvision.datasets import CIFAR10, CIFAR100
 
 import os
 import argparse
@@ -82,25 +82,23 @@ if __name__ == '__main__':
     print(args.model_name, args.checkpoint)
     if os.path.exists(f'simclr/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     if args.dataset == 'cifar10':
-        transform = utils.test_transform
+        transform = utils.CIFAR10Pair.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
-    elif args.dataset == 'stl10':
-        transform = utils.test_transform
-        train_data = STL10(root='./data', split='train', transform=transform, download=True)
-        test_data = STL10(root='./data', split='test', transform=transform, download=True)
-        num_class = 10
+    elif args.dataset == 'cifar100':
+        transform = utils.CIFAR100Pair.get_transform(train=False)
+        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
+        num_class = 100
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -165,4 +163,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'simclr/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')

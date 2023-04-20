@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import numpy as np
-from byol import MixupBYOL
+from byol import BYOL
 
 import utils
 from mixup import mixup_data
@@ -27,9 +27,9 @@ if __name__ == '__main__':
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_alpha{}_{}'.format(args.alpha, args.seed)
+        model_name = 'myol_three_losses_{}'.format(args.seed)
     else:
-        model_name = 'byol_{}_{}'.format(args.seed)
+        model_name = 'byol_{}'.format(args.seed)
 
     algo = 'myol' if args.mixup else 'byol'
     result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
@@ -39,27 +39,29 @@ if __name__ == '__main__':
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
     
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
-        train_transform = utils.tribyol_transform
+        train_transform = utils.CIFAR10Pair.get_transform(train=True)
         train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    elif args.dataset == 'cifar100':
+        train_transform = utils.CIFAR100Pair.get_transform(train=True)
+        train_data = utils.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': [], 'mixup_loss': []}#, 'valid_loss':[]}
     
     model = Model().cuda()
 
-    learner = MixupBYOL(
+    learner = BYOL(
         model.f,
         image_size=32,
         hidden_layer=-2,
@@ -69,6 +71,7 @@ if __name__ == '__main__':
     )
 
     optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
     
     for epoch in range(1, epochs + 1):
@@ -78,33 +81,25 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for i, (x1, x2, _) in enumerate(train_loader):
-            print(i)
+        for x1, x2, _ in data_bar:
             batch_size = x1.size(0)
             x1, x2 = x1.cuda(), x2.cuda()
             
-            # loss = learner(x1, x2)
-            loss = learner(x1, x2, mixup=args.mixup)
-            total_loss += loss.item() * batch_size
+            with torch.cuda.amp.autocast():
+                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
 
-            # if args.mixup:
-            #     mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=args.alpha, use_cuda=True)
-
-            #     mixup_loss = learner.mixup(mixed_x, x1, x2, lam)
-            #     loss += mixup_loss
-
-            # loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
+            total_num += batch_size
+            total_loss += byol_loss.item() * batch_size
+            total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
 
             optimizer.zero_grad()
-            loss.backward()
-            # mixup_loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             learner.update_moving_average()
 
-            total_num += batch_size
-            # total_mixup_loss += mixup_loss.item() * batch_size if args.mixup else 0
-            # data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
+            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f} Mixup Loss: {:.4f}'.format(epoch, epochs, total_loss / total_num, total_mixup_loss / total_num))
         train_loss = total_loss / total_num
         mixup_loss = total_mixup_loss / total_num
 
@@ -113,9 +108,9 @@ if __name__ == '__main__':
         results['train_loss'].append(train_loss)
         results['mixup_loss'].append(mixup_loss)
         
-        # # save statistics
-        # data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        # data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
+        # save statistics
+        data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
+        data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
 
-        # if epoch % 10 == 0:
-        #     torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')

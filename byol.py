@@ -272,7 +272,6 @@ class BYOL(nn.Module):
         loss_two = loss_fn(online_pred_two, target_proj_one)
 
         byol_loss = (loss_one + loss_two).mean()
-        print("byol loss: ", byol_loss.item())
 
         if mixup:
             lam = np.random.beta(1.0, 1.0, size=x1.size(0))
@@ -280,38 +279,27 @@ class BYOL(nn.Module):
             idx = torch.randperm(x1.size(0)).cuda()
 
             mixed_x = lam * x1 + (1 - lam) * x2[idx]
-            # x2 = x2[idx]
             lam = lam.reshape(-1, 1)
-            # mixed_x, x1, x2, lam = mixup_data(x1, x2, alpha=1.0)
 
             mixed_proj, _ = self.online_encoder(mixed_x)
-            online_proj_one, _ = self.online_encoder(x1)
-            online_proj_two, _ = self.online_encoder(x2[idx])
             mixed_pred = self.online_predictor(mixed_proj)
-            online_pred_one = self.online_predictor(online_proj_one)
-            online_pred_two = self.online_predictor(online_proj_two)
-            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two
+            online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
 
             with torch.no_grad():
-                target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
-                
                 target_mixed_proj, _ = target_encoder(mixed_x)
-                target_proj_one, _ = target_encoder(x1)
-                target_proj_two, _ = target_encoder(x2[idx])
-                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two
+                target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
                 
-            # prediction mixup
             loss_one = loss_fn(mixed_pred, target_proj)
-            # projection mixup
             loss_two = loss_fn(online_pred, target_mixed_proj)
-            mixup_loss = (loss_one + loss_two).mean()
-            print("mixup loss: ", mixup_loss.item())
+            loss_three = loss_fn(mixed_pred, target_mixed_proj)
+            
+            mixup_loss = (loss_one + loss_two + loss_three).mean()
         else:
             mixup_loss = 0
 
         loss = byol_loss + mixup_loss
 
-        return loss#, byol_loss, mixup_loss
+        return loss, byol_loss, mixup_loss
 
 class MixupBYOL(BYOL):
     def __init__(
@@ -360,7 +348,6 @@ class MixupBYOL(BYOL):
         # projection mixup
         loss_two = loss_fn(online_pred, target_mixed_proj)
         loss = (loss_one + loss_two).mean()
-        print("mixup loss: ", loss.item())
         return loss
 
 class TriBYOL(BYOL):
