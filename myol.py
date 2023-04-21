@@ -9,7 +9,6 @@ import numpy as np
 from byol import BYOL
 
 import utils
-from mixup import mixup_data
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -21,18 +20,19 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--ablation', type=int)
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
 
     batch_size, epochs = args.batch_size, args.epochs
     
     if args.mixup:
-        model_name = 'myol_three_losses_{}'.format(args.seed)
+        model_name = 'myol_ablation{}_{}'.format(args.ablation, args.seed)
     else:
         model_name = 'byol_{}'.format(args.seed)
 
     algo = 'myol' if args.mixup else 'byol'
-    result_path = f'simclr/{args.dataset}/results_{algo}_batch{batch_size}/'
+    result_path = f'ablation/{args.dataset}/results_{algo}_batch{batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             x1, x2 = x1.cuda(), x2.cuda()
             
             with torch.cuda.amp.autocast():
-                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup)
+                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup, ablation=args.ablation)
 
             total_num += batch_size
             total_loss += byol_loss.item() * batch_size

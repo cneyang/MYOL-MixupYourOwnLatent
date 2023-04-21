@@ -70,17 +70,17 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--algo', type=str, default='byol')
+    parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--model_name', type=str, default='byol')
     parser.add_argument('--checkpoint', type=str, default='best')
-    parser.add_argument('--seed', type=int, default=27407)
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
 
     print(args.model_name, args.checkpoint)
-    if os.path.exists(f'simclr/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+    if os.path.exists(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
         print('Already done')
         import sys
         sys.exit()
@@ -107,7 +107,7 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'simclr/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
+    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -163,4 +163,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'simclr/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
