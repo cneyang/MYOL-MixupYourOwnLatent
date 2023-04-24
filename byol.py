@@ -284,20 +284,29 @@ class BYOL(nn.Module):
 
             mixed_proj, _ = self.online_encoder(mixed_x)
             mixed_pred = self.online_predictor(mixed_proj)
+            online_proj = lam * online_proj_one + (1 - lam) * online_proj_two[idx]
             online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
 
             with torch.no_grad():
                 target_mixed_proj, _ = target_encoder(mixed_x)
                 target_proj = lam * target_proj_one + (1 - lam) * target_proj_two[idx]
 
-            if ablation == 0:
-                mixup_loss = loss_fn(mixed_pred, target_proj).mean()
-            elif ablation == 1:
-                mixup_loss = loss_fn(online_pred, target_mixed_proj).mean()
-            elif ablation == 2:
-                mixup_loss = loss_fn(mixed_pred, target_mixed_proj).mean()
-            elif ablation == 3:
-                mixup_loss = loss_fn(online_pred, target_mixed_proj).mean()
+            mixup_loss = 0
+            if '0' in ablation:
+                # proj mixup
+                mixup_loss += loss_fn(mixed_pred, target_proj).mean()
+            if '1' in ablation:
+                # pred mixup
+                mixup_loss += loss_fn(online_pred, target_mixed_proj).mean()
+            if '2' in ablation:
+                # input mixup
+                mixup_loss += loss_fn(mixed_pred, target_mixed_proj).mean()
+            if '3' in ablation:
+                # output mixup
+                mixup_loss += loss_fn(online_pred, target_proj).mean()
+            if '4' in ablation:
+                # online target
+                mixup_loss += loss_fn(mixed_pred, online_proj).mean()
         else:
             mixup_loss = 0
 

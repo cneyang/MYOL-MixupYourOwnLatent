@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
-    parser.add_argument('--ablation', type=int)
+    parser.add_argument('--ablation', type=str)
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
 
