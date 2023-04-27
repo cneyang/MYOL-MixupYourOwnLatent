@@ -12,8 +12,9 @@ class Model(nn.Module):
         encoder = resnet50()
         encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         encoder.maxpool = nn.Identity()
+        encoder.fc = nn.Identity()
         self.f = encoder
-        
+
         # projection head
         self.g = nn.Sequential(nn.Linear(2048, 512, bias=False), nn.BatchNorm1d(512),
                                nn.ReLU(inplace=True), nn.Linear(512, feature_dim, bias=True))

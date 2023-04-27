@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100, STL10
+from torchvision.datasets import CIFAR10, STL10, Flowers102, FGVCAircraft
+
 import os
 import argparse
 import numpy as np
@@ -10,7 +11,7 @@ from tqdm import tqdm
 from sklearn import preprocessing
 
 import utils
-from model import Model
+from model import Model, SimCLRModel
 
 
 class Encoder(nn.Module):
@@ -18,7 +19,7 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
 
         # encoder
-        model = Model()
+        model = SimCLRModel()
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
         self.f = model.f
@@ -74,33 +75,30 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=27407)
     args = parser.parse_args()
 
+    batch_size = 512
+    checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
+    result_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_tribyol-eval_{args.seed}_statistics{checkpoint}.csv'
+
+    # if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv'):
+    #     print('Already evaluated')
+    #     import sys
+    #     sys.exit()
+    print(f'linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv')
+        
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    batch_size = 512
-    checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
-    result_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_tribyol-eval_{args.seed}_statistics{checkpoint}.csv'
-
-    if os.path.exists(result_path):
-        print('Already done')
-        import sys
-        sys.exit()
-
     if args.dataset == 'cifar10':
-        transform = utils.tribyol_test_transform
+        # transform = utils.test_transform
+        transform = utils.test_transform
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
-    elif args.dataset == 'cifar100':
-        transform = utils.tribyol_test_transform
-        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
-        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
-        num_class = 100
     elif args.dataset == 'stl10':
-        transform = utils.tribyol_test_transform
+        transform = utils.test_transform
         train_data = STL10(root='./data', split='train', transform=transform, download=True)
         test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10
@@ -171,4 +169,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(result_path, index_label='epoch')
+    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv', index_label='epoch')
