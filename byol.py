@@ -246,6 +246,7 @@ class BYOL(nn.Module):
         x2=None,
         mixup=False,
         ablation=-1,
+        noise=0.,
         return_embedding = False,
         return_projection = True,
     ):
@@ -284,7 +285,6 @@ class BYOL(nn.Module):
 
             mixed_proj, _ = self.online_encoder(mixed_x)
             mixed_pred = self.online_predictor(mixed_proj)
-            online_proj = lam * online_proj_one + (1 - lam) * online_proj_two[idx]
             online_pred = lam * online_pred_one + (1 - lam) * online_pred_two[idx]
 
             with torch.no_grad():
@@ -304,9 +304,6 @@ class BYOL(nn.Module):
             if '3' in ablation:
                 # output mixup
                 mixup_loss += loss_fn(online_pred, target_proj).mean()
-            if '4' in ablation:
-                # online target
-                mixup_loss += loss_fn(mixed_pred, online_proj).mean()
         else:
             mixup_loss = 0
 

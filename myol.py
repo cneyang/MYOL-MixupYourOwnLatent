@@ -20,6 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--mixup', action='store_true', help='Use mixup')
+    parser.add_argument('--noise', default=0., type=float)
     parser.add_argument('--ablation', type=str)
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
@@ -28,6 +29,8 @@ if __name__ == '__main__':
     
     if args.mixup:
         model_name = 'myol_ablation{}_{}'.format(args.ablation, args.seed)
+        if args.noise > 0:
+            model_name = 'myol_ablation{}_noise{}_{}'.format(args.ablation, args.noise, args.seed)
     else:
         model_name = 'byol_{}'.format(args.seed)
 
@@ -86,7 +89,7 @@ if __name__ == '__main__':
             x1, x2 = x1.cuda(), x2.cuda()
             
             with torch.cuda.amp.autocast():
-                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup, ablation=args.ablation)
+                loss, byol_loss, mixup_loss = learner(x1, x2, mixup=args.mixup, ablation=args.ablation, noise=args.noise)
 
             total_num += batch_size
             total_loss += byol_loss.item() * batch_size
