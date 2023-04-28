@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 import numpy as np
 
-import utils
+import dataset
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     model_name = f'{args.algo}_{args.seed}'
 
-    result_path = f'dev/{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
+    result_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -41,12 +41,12 @@ if __name__ == '__main__':
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
-        train_transform = utils.CIFAR10Pair.get_transform(train=True)
-        train_data = utils.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_transform = dataset.CIFAR10Pair.get_transform(train=True)
+        train_data = dataset.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     elif args.dataset == 'cifar100':
-        train_transform = utils.CIFAR100Pair.get_transform(train=True)
-        train_data = utils.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_transform = dataset.CIFAR100Pair.get_transform(train=True)
+        train_data = dataset.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': []}
@@ -80,7 +80,6 @@ if __name__ == '__main__':
             
             with torch.cuda.amp.autocast():
                 loss = learner(x1, x2)
-                print(loss.item())
 
             total_num += batch_size
             total_loss += loss.item() * batch_size
