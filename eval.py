@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, STL10, Flowers102, FGVCAircraft
+from torchvision.datasets import CIFAR10, CIFAR100
 
 import os
 import argparse
@@ -11,7 +11,7 @@ from tqdm import tqdm
 from sklearn import preprocessing
 
 import utils
-from model import Model, SimCLRModel
+from model import Model
 
 
 class Encoder(nn.Module):
@@ -19,9 +19,10 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
 
         # encoder
-        model = SimCLRModel()
+        model = Model()
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+            
         self.f = model.f
         self.f.fc = nn.Identity()
 
@@ -67,41 +68,37 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--algo', type=str, default='byol')
+    parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--model_name', type=str, default='byol')
     parser.add_argument('--checkpoint', type=str, default='best')
-    parser.add_argument('--seed', type=int, default=27407)
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
     checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
-    result_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_tribyol-eval_{args.seed}_statistics{checkpoint}.csv'
 
-    # if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv'):
-    #     print('Already evaluated')
-    #     import sys
-    #     sys.exit()
-    print(f'linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv')
+    print(args.model_name, args.checkpoint)
+    if os.path.exists(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+        print('Already done')
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     if args.dataset == 'cifar10':
-        # transform = utils.test_transform
-        transform = utils.test_transform
+        transform = utils.CIFAR10Pair.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
-    elif args.dataset == 'stl10':
-        transform = utils.test_transform
-        train_data = STL10(root='./data', split='train', transform=transform, download=True)
-        test_data = STL10(root='./data', split='test', transform=transform, download=True)
-        num_class = 10
+    elif args.dataset == 'cifar100':
+        transform = utils.CIFAR100Pair.get_transform(train=False)
+        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
+        num_class = 100
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -110,7 +107,7 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
+    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -123,15 +120,11 @@ if __name__ == '__main__':
     if len(x_train.shape) > 2:
         x_train = torch.mean(x_train, dim=[2, 3])
         x_test = torch.mean(x_test, dim=[2, 3])
-        
-    scaler = preprocessing.StandardScaler()
-    scaler.fit(x_train)
-    x_train = scaler.transform(x_train).astype(np.float32)
-    x_test = scaler.transform(x_test).astype(np.float32)
 
-    train_loader, test_loader = create_data_loaders_from_arrays(torch.from_numpy(x_train), y_train, torch.from_numpy(x_test), y_test)
+    train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
 
-    optimizer = torch.optim.Adam(fc.parameters(), lr=3e-4)
+    optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*len(train_loader), eta_min=0, last_epoch=-1)
     criterion = torch.nn.CrossEntropyLoss()
     
     eval_every_n_epochs = 10
@@ -150,6 +143,7 @@ if __name__ == '__main__':
             
             loss.backward()
             optimizer.step()
+            scheduler.step()
         
         if epoch % eval_every_n_epochs == 0:
             total_correct_1, total_correct_5, total_num = 0.0, 0.0, 0
@@ -169,4 +163,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_orgle_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
