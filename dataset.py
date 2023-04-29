@@ -1,6 +1,7 @@
 from PIL import Image
 from torchvision import transforms
-from torchvision.datasets import CIFAR10, CIFAR100, STL10
+import numpy as np
+from torchvision.datasets import CIFAR10, CIFAR100, STL10, ImageFolder
 from typing import Any, Callable, Optional, Tuple
 
 
@@ -101,3 +102,62 @@ class CIFAR100(CIFAR100):
         else:
             return (pos_1, pos_2), target
 
+class STL10(STL10):
+    def __init__(
+        self,
+        root: str,
+        split: str = "train",
+        folds: Optional[int] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        download: bool = False,
+        triplet: bool = False,
+    ) -> None:
+        super().__init__(root, split, folds, transform, target_transform, download)
+        self.triplet = triplet
+
+    def __getitem__(self, index):
+        img, target = self.data[index], int(self.labels[index])
+        img = Image.fromarray(np.transpose(img, (1,2,0)))
+
+        if self.transform is not None:
+            pos_1 = self.transform(img)
+            pos_2 = self.transform(img)
+            if self.triplet:
+                pos_3 = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target
+
+class TinyImageNet(ImageFolder):
+    def __init__(
+        self,
+        root: str,
+        transform: Optional[Callable] = None,
+        triplet: bool = False,
+    ):
+        super().__init__(root, transform)
+        self.triplet = triplet
+
+    def __getitem__(self, index):
+        path, target = self.samples[index]
+        sample = self.loader(path)
+
+        if self.transform is not None:
+            pos_1 = self.transform(sample)
+            pos_2 = self.transform(sample)
+            if self.triplet:
+                pos_3 = self.transform(sample)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target
