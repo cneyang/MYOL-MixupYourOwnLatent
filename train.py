@@ -48,6 +48,10 @@ if __name__ == '__main__':
         train_transform = dataset.CIFAR100Pair.get_transform(train=True)
         train_data = dataset.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    elif args.dataset == 'stl10':
+        pass
+    elif args.dataset == 'tinyimagenet':
+        pass
 
     results = {'train_loss': []}
     

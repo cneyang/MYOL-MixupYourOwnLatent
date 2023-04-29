@@ -178,8 +178,7 @@ class BYOL(nn.Module):
 
         # send a mock image tensor to instantiate singleton parameters
         with torch.no_grad():
-            x = torch.randn(2, 3, image_size, image_size, device=device)
-            BYOL.forward(self, x, x)
+            self.forward(self, torch.randn(2, 3, image_size, image_size, device=device))
 
     @singleton('target_encoder')
     def _get_target_encoder(self):
@@ -251,7 +250,7 @@ class MYOL(BYOL):
     def forward(
         self,
         x1,
-        x2,
+        x2=None,
         return_embedding = False,
         return_projection = True,
     ):
@@ -259,6 +258,9 @@ class MYOL(BYOL):
 
         if return_embedding:
             return self.online_encoder(x1, return_projection = return_projection)
+        
+        if x2 is None:
+            x2 = x1
 
         online_proj_one, _ = self.online_encoder(x1)
         online_proj_two, _ = self.online_encoder(x2)
@@ -295,3 +297,83 @@ class MYOL(BYOL):
         loss = byol_loss + mixup_loss
 
         return loss
+    
+class TRIBYOL(BYOL):
+    def __init__(
+        self,
+        net,
+        image_size,
+        hidden_layer = -2,
+        projection_size = 256,
+        projection_hidden_size = 4096,
+        moving_average_decay = 0.99,
+        use_momentum = True
+    ):
+        super().__init__(
+            net,
+            image_size,
+            hidden_layer,
+            projection_size,
+            projection_hidden_size,
+            moving_average_decay,
+            use_momentum
+        )
+        self.update_target_one = True
+
+    @singleton('target_encoder')
+    def _get_target_encoder(self):
+        target_encoder_one = copy.deepcopy(self.online_encoder)
+        target_encoder_two = copy.deepcopy(self.online_encoder)
+        set_requires_grad(target_encoder_one, False)
+        set_requires_grad(target_encoder_two, False)
+        return target_encoder_one, target_encoder_two
+
+    def update_moving_average(self):
+        assert self.use_momentum, 'you do not need to update the moving average, since you have turned off momentum for the target encoder'
+        assert self.target_encoder is not None, 'target encoder has not been created yet'
+        if self.update_target_one:
+            update_moving_average(self.target_ema_updater, self.target_encoder[0], self.online_encoder)
+            self.update_target_one = False
+        else:
+            update_moving_average(self.target_ema_updater, self.target_encoder[1], self.online_encoder)
+            self.update_target_one = True
+
+    def forward(
+        self,
+        x1,
+        x2=None,
+        x3=None,
+        return_embedding = False,
+        return_projection = True,
+    ):
+        assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
+
+        if return_embedding:
+            return self.online_encoder(x1, return_projection = return_projection)
+        
+        if x2 is None and x3 is None:
+            x2 = x1
+            x3 = x1
+
+        online_proj_one, _ = self.online_encoder(x1)
+        online_proj_two, _ = self.online_encoder(x2)
+        online_proj_three, _ = self.online_encoder(x3)
+        online_pred_one = self.online_predictor(online_proj_one)
+        online_pred_two = self.online_predictor(online_proj_two)
+        online_pred_three = self.online_predictor(online_proj_three)
+
+        with torch.no_grad():
+            target_encoder_one, target_encoder_two = self._get_target_encoder() if self.use_momentum else self.online_encoder
+            target_one_proj_two, _ = target_encoder_one(x2)
+            target_one_proj_one, _ = target_encoder_one(x1)
+            target_two_proj_three, _ = target_encoder_two(x3)
+            target_two_proj_one, _ = target_encoder_two(x1)
+
+        loss_one_two = loss_fn(online_pred_one, target_one_proj_two)
+        loss_two_one = loss_fn(online_pred_two, target_one_proj_one)
+        loss_one_three = loss_fn(online_pred_one, target_two_proj_three)
+        loss_three_one = loss_fn(online_pred_three, target_two_proj_one)
+
+        loss = (loss_one_two + loss_two_one) / 2 + (loss_one_three + loss_three_one) / 2
+
+        return loss.mean()
