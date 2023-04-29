@@ -5,13 +5,14 @@ from torchvision.models.resnet import resnet50
 
 
 class Model(nn.Module):
-    def __init__(self, feature_dim=128):
+    def __init__(self, dataset, feature_dim=128):
         super(Model, self).__init__()
 
         # encoder
         encoder = resnet50()
         encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        encoder.maxpool = nn.Identity()
+        if dataset.startswith('cifar'):
+            encoder.maxpool = nn.Identity()
         encoder.fc = nn.Identity()
         self.f = encoder
 
