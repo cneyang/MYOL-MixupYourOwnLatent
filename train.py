@@ -83,11 +83,19 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, x3, _ in data_bar:
-            batch_size = x1[0].size(0)
+        for imgs, labels in data_bar:
+            if args.triplet:
+                x1, x2, x3 = imgs
+            else:
+                x1, x2 = imgs
+
+            batch_size = x1.size(0)
 
             with torch.cuda.amp.autocast():
-                loss = learner(x1, x2, x3)
+                if args.triplet:
+                    loss = learner(x1.cuda(), x2.cuda(), x3.cuda())
+                else:
+                    loss = learner(x1.cuda(), x2.cuda())
 
             total_num += batch_size
             total_loss += loss.item() * batch_size

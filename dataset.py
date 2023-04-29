@@ -44,13 +44,14 @@ class CIFAR10(CIFAR10):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
-            else:
-                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return pos_1, pos_2, pos_3, target
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target
 
 
 class CIFAR100(CIFAR100):
@@ -92,13 +93,14 @@ class CIFAR100(CIFAR100):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
-            else:
-                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return pos_1, pos_2, pos_3, target
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target
 
 class STL10(STL10):
     def __init__(
@@ -140,13 +142,14 @@ class STL10(STL10):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
-            else:
-                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return pos_1, pos_2, pos_3, target
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target
 
 class TinyImageNet(ImageFolder):
     def __init__(
@@ -184,10 +187,11 @@ class TinyImageNet(ImageFolder):
             pos_2 = self.transform(sample)
             if self.triplet:
                 pos_3 = self.transform(sample)
-            else:
-                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return pos_1, pos_2, pos_3, target
+        if self.triplet:
+            return (pos_1, pos_2, pos_3), target
+        else:
+            return (pos_1, pos_2), target

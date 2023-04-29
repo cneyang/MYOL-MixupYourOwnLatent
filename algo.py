@@ -178,7 +178,7 @@ class BYOL(nn.Module):
 
         # send a mock image tensor to instantiate singleton parameters
         with torch.no_grad():
-            self.forward(self, torch.randn(2, 3, image_size, image_size, device=device))
+            self.forward(torch.randn(2, 3, image_size, image_size, device=device))
 
     @singleton('target_encoder')
     def _get_target_encoder(self):
@@ -199,7 +199,6 @@ class BYOL(nn.Module):
         self,
         x1,
         x2 = None,
-        x3 = None,
         return_embedding = False,
         return_projection = True,
     ):
@@ -255,7 +254,6 @@ class MYOL(BYOL):
         self,
         x1,
         x2 = None,
-        x3 = None,
         return_embedding = False,
         return_projection = True,
     ):
