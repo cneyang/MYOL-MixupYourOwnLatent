@@ -198,7 +198,8 @@ class BYOL(nn.Module):
     def forward(
         self,
         x1,
-        x2,
+        x2 = None,
+        x3 = None,
         return_embedding = False,
         return_projection = True,
     ):
@@ -206,6 +207,9 @@ class BYOL(nn.Module):
 
         if return_embedding:
             return self.online_encoder(x1, return_projection = return_projection)
+        
+        if x2 is None:
+            x2 = x1
 
         online_proj_one, _ = self.online_encoder(x1)
         online_proj_two, _ = self.online_encoder(x2)
@@ -250,7 +254,8 @@ class MYOL(BYOL):
     def forward(
         self,
         x1,
-        x2=None,
+        x2 = None,
+        x3 = None,
         return_embedding = False,
         return_projection = True,
     ):
@@ -341,8 +346,8 @@ class TRIBYOL(BYOL):
     def forward(
         self,
         x1,
-        x2=None,
-        x3=None,
+        x2 = None,
+        x3 = None,
         return_embedding = False,
         return_projection = True,
     ):

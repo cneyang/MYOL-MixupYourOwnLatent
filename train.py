@@ -21,6 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=1.0, type=float, help='mixup alpha')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
+    args.triplet = True if args.algo == 'tribyol' else False
 
     model_name = f'{args.algo}_{args.seed}'
 
@@ -41,17 +42,21 @@ if __name__ == '__main__':
     writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
 
     if args.dataset == 'cifar10':
-        train_transform = dataset.CIFAR10Pair.get_transform(train=True)
-        train_data = dataset.CIFAR10Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_transform = dataset.CIFAR10.get_transform(train=True)
+        train_data = dataset.CIFAR10(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     elif args.dataset == 'cifar100':
-        train_transform = dataset.CIFAR100Pair.get_transform(train=True)
-        train_data = dataset.CIFAR100Pair(root='./data', train=True, transform=train_transform, download=True)
+        train_transform = dataset.CIFAR100.get_transform(train=True)
+        train_data = dataset.CIFAR100(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     elif args.dataset == 'stl10':
-        pass
+        train_transform = dataset.STL10.get_transform(train=True)
+        train_data = dataset.STL10(root='./data', split='train+unlabeled', transform=train_transform, download=True, triplet=args.triplet)
+        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     elif args.dataset == 'tinyimagenet':
-        pass
+        train_transform = dataset.TinyImageNet.get_transform(train=True)
+        train_data = dataset.TinyImageNet(root='./data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
+        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': []}
     
@@ -78,12 +83,11 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        for x1, x2, _ in data_bar:
-            batch_size = x1.size(0)
-            x1, x2 = x1.cuda(), x2.cuda()
-            
+        for x1, x2, x3, _ in data_bar:
+            batch_size = x1[0].size(0)
+
             with torch.cuda.amp.autocast():
-                loss = learner(x1, x2)
+                loss = learner(x1, x2, x3)
 
             total_num += batch_size
             total_loss += loss.item() * batch_size

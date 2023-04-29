@@ -44,14 +44,13 @@ class CIFAR10(CIFAR10):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
+            else:
+                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        if self.triplet:
-            return (pos_1, pos_2, pos_3), target
-        else:
-            return (pos_1, pos_2), target
+        return pos_1, pos_2, pos_3, target
 
 
 class CIFAR100(CIFAR100):
@@ -93,14 +92,13 @@ class CIFAR100(CIFAR100):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
+            else:
+                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        if self.triplet:
-            return (pos_1, pos_2, pos_3), target
-        else:
-            return (pos_1, pos_2), target
+        return pos_1, pos_2, pos_3, target
 
 class STL10(STL10):
     def __init__(
@@ -116,6 +114,23 @@ class STL10(STL10):
         super().__init__(root, split, folds, transform, target_transform, download)
         self.triplet = triplet
 
+    @staticmethod
+    def get_transform(train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(96, scale=(0.2, 1.)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2565, 0.2712])
+            ])
+        else:
+            return transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2565, 0.2712]),
+            ])
+
     def __getitem__(self, index):
         img, target = self.data[index], int(self.labels[index])
         img = Image.fromarray(np.transpose(img, (1,2,0)))
@@ -125,14 +140,13 @@ class STL10(STL10):
             pos_2 = self.transform(img)
             if self.triplet:
                 pos_3 = self.transform(img)
+            else:
+                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        if self.triplet:
-            return (pos_1, pos_2, pos_3), target
-        else:
-            return (pos_1, pos_2), target
+        return pos_1, pos_2, pos_3, target
 
 class TinyImageNet(ImageFolder):
     def __init__(
@@ -143,6 +157,23 @@ class TinyImageNet(ImageFolder):
     ):
         super().__init__(root, transform)
         self.triplet = triplet
+    
+    @staticmethod
+    def get_transform(train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomResizedCrop(64, scale=(0.2, 1.)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
+            ])
+        else:
+            return transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+            ])
 
     def __getitem__(self, index):
         path, target = self.samples[index]
@@ -153,11 +184,10 @@ class TinyImageNet(ImageFolder):
             pos_2 = self.transform(sample)
             if self.triplet:
                 pos_3 = self.transform(sample)
+            else:
+                pos_3 = None
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        if self.triplet:
-            return (pos_1, pos_2, pos_3), target
-        else:
-            return (pos_1, pos_2), target
+        return pos_1, pos_2, pos_3, target
