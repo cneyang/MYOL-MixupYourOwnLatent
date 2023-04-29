@@ -8,9 +8,8 @@ import argparse
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn import preprocessing
 
-import utils
+import dataset
 from model import Model
 
 
@@ -71,16 +70,14 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--algo', type=str, default='myol')
-    parser.add_argument('--model_name', type=str, default='byol')
-    parser.add_argument('--checkpoint', type=str, default='best')
+    parser.add_argument('--checkpoint', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
-    checkpoint = '' if args.checkpoint == 'best' else '_' + args.checkpoint
 
-    print(args.model_name, args.checkpoint)
-    if os.path.exists(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv'):
+    print(args.algo, args.checkpoint)
+    if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.algo}_{args.seed}_statistics_{args.checkpoint}.csv'):
         print('Already done')
         import sys
         sys.exit()
@@ -90,12 +87,12 @@ if __name__ == '__main__':
     torch.cuda.manual_seed(args.seed)
 
     if args.dataset == 'cifar10':
-        transform = utils.CIFAR10Pair.get_transform(train=False)
+        transform = dataset.CIFAR10Pair.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'cifar100':
-        transform = utils.CIFAR100Pair.get_transform(train=False)
+        transform = dataset.CIFAR100Pair.get_transform(train=False)
         train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
         num_class = 100
@@ -107,7 +104,7 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.model_name}_{args.seed}{checkpoint}.pth'
+    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.algo}_{args.seed}_{args.checkpoint}.pth'
     encoder = Encoder(pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -163,4 +160,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.model_name}_{args.seed}_statistics{checkpoint}.csv', index_label='epoch')
+    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.algo}_{args.seed}_statistics_{args.checkpoint}.csv', index_label='epoch')
