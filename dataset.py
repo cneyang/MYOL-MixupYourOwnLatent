@@ -1,8 +1,9 @@
 from PIL import Image
 from torchvision import transforms
-import numpy as np
 from torchvision.datasets import CIFAR10, CIFAR100, STL10, ImageFolder
-from typing import Any, Callable, Optional, Tuple
+from typing import Callable, Optional
+
+import numpy as np
 
 
 class CIFAR10(CIFAR10):
@@ -52,7 +53,6 @@ class CIFAR10(CIFAR10):
             return (pos_1, pos_2, pos_3), target
         else:
             return (pos_1, pos_2), target
-
 
 class CIFAR100(CIFAR100):
     def __init__(

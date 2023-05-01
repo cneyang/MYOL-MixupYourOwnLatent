@@ -44,23 +44,21 @@ if __name__ == '__main__':
     if args.dataset == 'cifar10':
         train_transform = dataset.CIFAR10.get_transform(train=True)
         train_data = dataset.CIFAR10(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         image_size = 32
     elif args.dataset == 'cifar100':
         train_transform = dataset.CIFAR100.get_transform(train=True)
         train_data = dataset.CIFAR100(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         image_size = 32
     elif args.dataset == 'stl10':
         train_transform = dataset.STL10.get_transform(train=True)
         train_data = dataset.STL10(root='./data', split='train+unlabeled', transform=train_transform, download=True, triplet=args.triplet)
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         image_size = 96
     elif args.dataset == 'tinyimagenet':
         train_transform = dataset.TinyImageNet.get_transform(train=True)
         train_data = dataset.TinyImageNet(root='./data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         image_size = 64
+
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': []}
     

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10, CIFAR100, STL10, ImageFolder
 
 import os
 import argparse
@@ -14,11 +14,11 @@ from model import Model
 
 
 class Encoder(nn.Module):
-    def __init__(self, pretrained_path=None):
+    def __init__(self, dataset, pretrained_path=None):
         super(Encoder, self).__init__()
 
         # encoder
-        model = Model()
+        model = Model(dataset)
         if pretrained_path is not None:
             model.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
             
@@ -87,15 +87,25 @@ if __name__ == '__main__':
     torch.cuda.manual_seed(args.seed)
 
     if args.dataset == 'cifar10':
-        transform = dataset.CIFAR10Pair.get_transform(train=False)
+        transform = dataset.CIFAR10.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'cifar100':
-        transform = dataset.CIFAR100Pair.get_transform(train=False)
+        transform = dataset.CIFAR100.get_transform(train=False)
         train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
         num_class = 100
+    elif args.dataset == 'stl10':
+        transform = dataset.STL10.get_transform(train=False)
+        train_data = STL10(root='./data', split='train', transform=transform, download=True)
+        test_data = STL10(root='./data', split='test', transform=transform, download=True)
+        num_class = 10
+    elif args.dataset == 'tinyimagenet':
+        transform = dataset.TinyImageNet.get_transform(train=False)
+        train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=transform)
+        test_data = ImageFolder(root='./data/tiny-imagenet-200/test', transform=transform)
+        num_class = 200
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -105,7 +115,7 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.algo}_{args.seed}_{args.checkpoint}.pth'
-    encoder = Encoder(pretrained_path=model_path).to(device)
+    encoder = Encoder(args.dataset, pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
     fc = fc.to(device)

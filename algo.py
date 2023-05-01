@@ -1,13 +1,12 @@
 # original code from https://github.com/lucidrains/byol-pytorch
 
 import torch
-from torch import nn
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
 from functools import wraps
 import copy
-import random
 
 
 # helper functions
