@@ -104,7 +104,7 @@ if __name__ == '__main__':
     elif args.dataset == 'tinyimagenet':
         transform = dataset.TinyImageNet.get_transform(train=False)
         train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=transform)
-        test_data = ImageFolder(root='./data/tiny-imagenet-200/test', transform=transform)
+        test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=transform)
         num_class = 200
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
