@@ -379,3 +379,161 @@ class TRIBYOL(BYOL):
         loss = (loss_one_two + loss_two_one) / 2 + (loss_one_three + loss_three_one) / 2
 
         return loss.mean()
+    
+class IMIX(BYOL):
+    def __init__(
+        self,
+        net,
+        image_size,
+        hidden_layer = -2,
+        projection_size = 256,
+        projection_hidden_size = 4096,
+        moving_average_decay = 0.99,
+        use_momentum = True
+    ):
+        super().__init__(
+            net,
+            image_size,
+            hidden_layer,
+            projection_size,
+            projection_hidden_size,
+            moving_average_decay,
+            use_momentum
+        )
+
+    def mixup(self, input):
+        beta = torch.distributions.beta.Beta([1.0, 1.0])
+        randind = torch.randperm(input.shape[0], device=input.device)
+        lam = beta.sample([input.shape[0]]).to(device=input.device)
+        lam = torch.max(lam, 1. - lam)
+        lam_expanded = lam.view([-1] + [1]*(input.dim()-1))
+        output = lam_expanded * input + (1. - lam_expanded) * input[randind]
+        return output, randind, lam
+
+    def forward(
+        self,
+        x1,
+        x2 = None,
+        return_embedding = False,
+        return_projection = True,
+    ):
+        assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
+
+        if return_embedding:
+            return self.online_encoder(x1, return_projection = return_projection)
+        
+        if x2 is None:
+            x2 = x1
+
+        x1, labels_aux, lam = self.mixup(x1)
+
+        online_proj = self.online_encoder(x1)
+        online_pred = self.online_predictor(online_proj)
+        online_pred = F.normalize(online_pred, dim=1)
+        
+        with torch.no_grad():
+            target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
+            target_proj = target_encoder(x2)
+            target_proj = F.normalize(target_proj, dim=1)
+
+        logits = online_pred.mm(target_proj.t())
+        target_logits = lam * logits.diag() + (1. - lam) * logits[range(x2.size(0)), labels_aux]
+        loss = (2. - 2. * target_logits).mean()
+
+        return loss
+    
+class UNMIX(BYOL):
+    def __init__(
+        self,
+        net,
+        image_size,
+        hidden_layer = -2,
+        projection_size = 256,
+        projection_hidden_size = 4096,
+        moving_average_decay = 0.99,
+        use_momentum = True
+    ):
+        super().__init__(
+            net,
+            image_size,
+            hidden_layer,
+            projection_size,
+            projection_hidden_size,
+            moving_average_decay,
+            use_momentum
+        )
+
+    def rand_bbox(self, size, lam):
+        W = size[2]
+        H = size[3]
+        cut_rat = np.sqrt(1. - lam)
+        cut_w = np.int(W * cut_rat)
+        cut_h = np.int(H * cut_rat)
+
+        # uniform
+        cx = np.random.randint(W)
+        cy = np.random.randint(H)
+
+        bbx1 = np.clip(cx - cut_w // 2, 0, W)
+        bby1 = np.clip(cy - cut_h // 2, 0, H)
+        bbx2 = np.clip(cx + cut_w // 2, 0, W)
+        bby2 = np.clip(cy + cut_h // 2, 0, H)
+
+        return bbx1, bby1, bbx2, bby2
+
+    def forward(
+        self,
+        x1,
+        x2 = None,
+        return_embedding = False,
+        return_projection = True,
+    ):
+        assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
+
+        if return_embedding:
+            return self.online_encoder(x1, return_projection = return_projection)
+        
+        if x2 is None:
+            x2 = x1
+
+        online_proj_one, _ = self.online_encoder(x1)
+        online_proj_two, _ = self.online_encoder(x2)
+
+        online_pred_one = self.online_predictor(online_proj_one)
+        online_pred_two = self.online_predictor(online_proj_two)
+
+        with torch.no_grad():
+            target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
+            
+            target_proj_one, _ = target_encoder(x1)
+            target_proj_two, _ = target_encoder(x2)
+
+        loss_one = loss_fn(online_pred_one, target_proj_two)
+        loss_two = loss_fn(online_pred_two, target_proj_one)
+
+        byol_loss = (loss_one + loss_two).mean()
+
+        r = np.random.rand(1)
+        lam = np.random.beta(1.0, 1.0)
+        x_re = torch.flip(x1, (0,))
+
+        if r < 0.5:
+            mixed_x = lam * x1 + (1 - lam) * x_re
+            mixed_x_re = torch.flip(mixed_x, (0,))
+        else:
+            mixed_x = x1.clone()
+            bbx1, bby1, bbx2, bby2 = self.rand_bbox(x1.size(), lam)
+            mixed_x[:, :, bbx1:bbx2, bby1:bby2] = x_re[:, :, bbx1:bbx2, bby1:bby2]
+            mixed_x_re = torch.flip(mixed_x, (0,))
+            lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (x1.size()[-1] * x1.size()[-2]))
+
+        mixed_proj = self.online_encoder(mixed_x)
+        mixed_proj_re = self.online_encoder(mixed_x_re)
+        mixed_p = self.online_predictor(mixed_proj)
+        mixed_p_re = self.online_predictor(mixed_proj_re)
+
+        unmix_loss = lam * loss_fn(mixed_p, target_proj_one).mean() + (1 - lam) * loss_fn(mixed_p_re, target_proj_one).mean()
+
+        loss = byol_loss + unmix_loss
+
+        return loss
