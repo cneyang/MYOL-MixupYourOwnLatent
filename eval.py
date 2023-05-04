@@ -68,7 +68,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=512)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--checkpoint', type=int, default=1000)
     parser.add_argument('--seed', type=int, default=0)
