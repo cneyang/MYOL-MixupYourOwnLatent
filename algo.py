@@ -402,7 +402,7 @@ class IMIX(BYOL):
         )
 
     def mixup(self, input):
-        beta = torch.distributions.beta.Beta([1.0, 1.0])
+        beta = torch.distributions.beta.Beta(1.0, 1.0)
         randind = torch.randperm(input.shape[0], device=input.device)
         lam = beta.sample([input.shape[0]]).to(device=input.device)
         lam = torch.max(lam, 1. - lam)
@@ -427,13 +427,13 @@ class IMIX(BYOL):
 
         x1, labels_aux, lam = self.mixup(x1)
 
-        online_proj = self.online_encoder(x1)
+        online_proj, _ = self.online_encoder(x1)
         online_pred = self.online_predictor(online_proj)
         online_pred = F.normalize(online_pred, dim=1)
         
         with torch.no_grad():
             target_encoder = self._get_target_encoder() if self.use_momentum else self.online_encoder
-            target_proj = target_encoder(x2)
+            target_proj, _ = target_encoder(x2)
             target_proj = F.normalize(target_proj, dim=1)
 
         logits = online_pred.mm(target_proj.t())
@@ -467,8 +467,8 @@ class UNMIX(BYOL):
         W = size[2]
         H = size[3]
         cut_rat = np.sqrt(1. - lam)
-        cut_w = np.int(W * cut_rat)
-        cut_h = np.int(H * cut_rat)
+        cut_w = int(W * cut_rat)
+        cut_h = int(H * cut_rat)
 
         # uniform
         cx = np.random.randint(W)
@@ -527,8 +527,8 @@ class UNMIX(BYOL):
             mixed_x_re = torch.flip(mixed_x, (0,))
             lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (x1.size()[-1] * x1.size()[-2]))
 
-        mixed_proj = self.online_encoder(mixed_x)
-        mixed_proj_re = self.online_encoder(mixed_x_re)
+        mixed_proj, _ = self.online_encoder(mixed_x)
+        mixed_proj_re, _ = self.online_encoder(mixed_x_re)
         mixed_p = self.online_predictor(mixed_proj)
         mixed_p_re = self.online_predictor(mixed_proj_re)
 
