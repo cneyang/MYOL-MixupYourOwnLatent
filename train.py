@@ -91,10 +91,8 @@ if __name__ == '__main__':
 
     if args.algo == 'imix':
         optimizer = optim.SGD(learner.parameters(), lr=0.125, momentum=0.9, weight_decay=1e-4)
-    elif args.algo == 'unmix':
-        optimizer = optim.Adam(learner.parameters(), lr=2e-3, weight_decay=1e-6)
     else:
-        optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+        optimizer = optim.Adam(learner.parameters(), lr=2e-3, weight_decay=1e-6)
 
     lr = optimizer.param_groups[0]['lr']
     eta_min = lr * 0.001
@@ -106,11 +104,11 @@ if __name__ == '__main__':
     for epoch in range(1, args.epochs + 1):
         # train
         total_loss, total_num = 0, 0
-        data_bar = tqdm(enumerate(train_loader))
+        data_bar = tqdm(train_loader)
 
         learner.train()
         adjust_learning_rate(optimizer, epoch, lr)
-        for i, (imgs, labels) in data_bar:
+        for i, (imgs, labels) in enumerate(data_bar):
             if epoch <= 10:
                 warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)
 
