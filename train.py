@@ -1,4 +1,5 @@
 import os
+import math
 import argparse
 import pandas as pd
 import torch
@@ -11,6 +12,19 @@ import dataset
 from model import Model
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
+
+
+def adjust_learning_rate(optimizer, epoch, lr):
+    lr *= 0.5 * (1. + math.cos(math.pi * epoch / 1000))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
+    p = (batch_id + 1 + epoch * total_batches) / (10 * total_batches)
+    lr = p * warmup_to
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -75,17 +89,31 @@ if __name__ == '__main__':
         moving_average_decay=0.996,
     )
 
-    optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+    if args.algo == 'imix':
+        optimizer = optim.SGD(learner.parameters(), lr=0.125, momentum=0.9, weight_decay=1e-4)
+    elif args.algo == 'unmix':
+        optimizer = optim.Adam(learner.parameters(), lr=2e-3, weight_decay=1e-6)
+    else:
+        optimizer = optim.Adam(learner.parameters(), lr=5e-4, weight_decay=1e-6)
+
+    lr = optimizer.param_groups[0]['lr']
+    eta_min = lr * 0.001
+    warmup_to = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * 10 / 1000)) / 2
+
     scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
     
     for epoch in range(1, args.epochs + 1):
         # train
         total_loss, total_num = 0, 0
-        data_bar = tqdm(train_loader)
+        data_bar = tqdm(enumerate(train_loader))
 
         learner.train()
-        for imgs, labels in data_bar:
+        adjust_learning_rate(optimizer, epoch, lr)
+        for i, (imgs, labels) in data_bar:
+            if epoch <= 10:
+                warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)
+
             if args.triplet:
                 x1, x2, x3 = imgs
             else:
