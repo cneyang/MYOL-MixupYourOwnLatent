@@ -14,10 +14,13 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 
-def adjust_learning_rate(optimizer, epoch, lr):
-    lr *= 0.5 * (1. + math.cos(math.pi * epoch / 1000))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+def adjust_learning_rate(optimizer, epoch, lr, scheduler):
+    if scheduler is not None:
+        scheduler.step()
+    else:
+        lr *= 0.5 * (1. + math.cos(math.pi * epoch / 1000))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
 def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
     p = (batch_id + 1 + epoch * total_batches) / (10 * total_batches)
@@ -29,14 +32,18 @@ def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', default=1000, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--algo', default='myol', type=str, help='Algorithm')
+    parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
+    parser.add_argument('--optim', default='adam', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=2e-3, type=float, help='Learning rate')
+    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
+    parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden dimension of the projection head')
+    parser.add_argument('--epochs', default=1000, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
     args.triplet = True if args.algo == 'tribyol' else False
 
-    model_name = f'{args.algo}_{args.seed}'
+    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
 
     result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
     if not os.path.exists(result_path):
@@ -45,8 +52,8 @@ if __name__ == '__main__':
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        import sys
-        sys.exit()
+        # import sys
+        # sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -85,18 +92,22 @@ if __name__ == '__main__':
         image_size=image_size,
         hidden_layer=-2,
         projection_size=128,
-        projection_hidden_size=512,
+        projection_hidden_size=args.hidden_dim,
         moving_average_decay=0.996,
     )
 
-    if args.algo == 'imix':
-        optimizer = optim.SGD(learner.parameters(), lr=0.125, momentum=0.9, weight_decay=1e-4)
-    else:
-        optimizer = optim.Adam(learner.parameters(), lr=2e-3, weight_decay=1e-6)
+    if args.optim == 'adam':
+        optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
+    elif args.optim == 'sgd':
+        optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
-    lr = optimizer.param_groups[0]['lr']
-    eta_min = lr * 0.001
-    warmup_to = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * 10 / 1000)) / 2
+    if args.cos:
+        scheduler = None
+        eta_min = args.lr * 0.001
+        warmup_to = eta_min + (args.lr - eta_min) * (1 + math.cos(math.pi * 10 / 1000)) / 2
+    else:
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[950, 975], gamma=0.2)
+        warmup_to = args.lr
 
     scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
@@ -107,7 +118,7 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        adjust_learning_rate(optimizer, epoch, lr)
+        adjust_learning_rate(optimizer, epoch, args.lr, scheduler)
         for i, (imgs, labels) in enumerate(data_bar):
             if epoch <= 10:
                 warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)

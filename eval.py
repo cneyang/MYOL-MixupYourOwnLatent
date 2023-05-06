@@ -67,20 +67,27 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--algo', type=str, default='myol')
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--checkpoint', type=int, default=1000)
+    parser.add_argument('--optim', default='adam', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=2e-3, type=float, help='Learning rate')
+    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
+    parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden dimension of the projection head')
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
 
-    print(args.algo, args.checkpoint)
-    if os.path.exists(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.algo}_{args.seed}_statistics_{args.checkpoint}.csv'):
+    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
+    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
+    print(model_name, args.checkpoint)
+    if os.path.exists(result_path):
         print('Already done')
-        import sys
-        sys.exit()
+        # import sys
+        # sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -114,7 +121,6 @@ if __name__ == '__main__':
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/{args.algo}_{args.seed}_{args.checkpoint}.pth'
     encoder = Encoder(args.dataset, pretrained_path=model_path).to(device)
 
     fc = FC(num_class=num_class)
@@ -170,4 +176,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(f'{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{args.algo}_{args.seed}_statistics_{args.checkpoint}.csv', index_label='epoch')
+    results.to_csv(result_path, index_label='epoch')
