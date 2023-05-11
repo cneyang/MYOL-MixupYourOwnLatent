@@ -86,8 +86,8 @@ if __name__ == '__main__':
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)

@@ -120,7 +120,7 @@ class STL10(STL10):
     def get_transform(train):
         if train:
             return transforms.Compose([
-                transforms.RandomResizedCrop(96, scale=(0.2, 1.)),
+                transforms.RandomResizedCrop(64, scale=(0.2, 1.)),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
                 transforms.RandomGrayscale(p=0.2),
@@ -129,6 +129,7 @@ class STL10(STL10):
             ])
         else:
             return transforms.Compose([
+                transforms.Resize(64),
                 transforms.ToTensor(),
                 transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2565, 0.2712]),
             ])

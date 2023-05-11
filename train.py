@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=2e-3, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
     parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden dimension of the projection head')
-    parser.add_argument('--epochs', default=1000, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
     args.triplet = True if args.algo == 'tribyol' else False
@@ -52,8 +52,8 @@ if __name__ == '__main__':
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     elif args.dataset == 'stl10':
         train_transform = dataset.STL10.get_transform(train=True)
         train_data = dataset.STL10(root='./data', split='train+unlabeled', transform=train_transform, download=True, triplet=args.triplet)
-        image_size = 96
+        image_size = 64
     elif args.dataset == 'tinyimagenet':
         train_transform = dataset.TinyImageNet.get_transform(train=True)
         train_data = dataset.TinyImageNet(root='./data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
