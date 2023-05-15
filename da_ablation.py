@@ -8,23 +8,15 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 import numpy as np
+import time
+from itertools import cycle
 
 import dataset
 from model import Model
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 
 
-def adjust_learning_rate(optimizer, epoch, lr, scheduler):
-    if scheduler is not None:
-        scheduler.step()
-    else:
-        lr *= 0.5 * (1. + math.cos(math.pi * epoch / 1000))
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
-
-def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
-    p = (batch_id + 1 + epoch * total_batches) / (10 * total_batches)
+def warmup_learning_rate(optimizer, batch_id, total_batches, warmup_to):
+    p = (batch_id + 1) / total_batches
     lr = p * warmup_to
 
     for param_group in optimizer.param_groups:
@@ -33,7 +25,7 @@ def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--algo', default='myol', type=str, help='Algorithm')
+    parser.add_argument('--algo', default='byol', type=str, help='Algorithm')
     parser.add_argument('--no-gray', dest='gray', action='store_false', help='Do not use gray scale')
     parser.add_argument('--no-color', dest='color', action='store_false', help='Do not use color jitter')
     parser.add_argument('--no-flip', dest='flip', action='store_false', help='Do not use horizontal flip')
@@ -42,19 +34,19 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
     parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
-    parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--iters', default=100000, type=int, help='Number of iterations to train')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
     args.triplet = True if args.algo == 'tribyol' else False
 
-    model_name = f'{args.algo}_gray{args.gray}_color{args.color}_flip{args.flip}_{args.seed}'
+    model_name = f'gray{args.gray}_color{args.color}_flip{args.flip}_{args.seed}'
 
-    result_path = f'ablation/{args.dataset}/'
+    result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
     print(model_name)
-    if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
+    if os.path.exists(result_path+f'{model_name}_{args.iters}.pth'):
         print(model_name, 'already exists')
         import sys
         sys.exit()
@@ -63,21 +55,37 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     
-    writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
-
-    transform = [transforms.RandomResizedCrop(32, scale=(0.2, 1.)),]
-    if not args.no_flip:
+    if 'cifar' in args.dataset:
+        transform = [transforms.RandomResizedCrop(32, scale=(0.2, 1.)),]
+    else:
+        transform = [transforms.RandomResizedCrop(64, scale=(0.2, 1.)),]
+    if args.flip:
         transform.append(transforms.RandomHorizontalFlip())
-    if not args.no_color:
+    if args.color:
         transform.append(transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8))
-    if not args.no_gray:
+    if args.gray:
         transform.append(transforms.RandomGrayscale(p=0.2))
     transform.append(transforms.ToTensor())
-    transform.append(transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)))
 
-    image_size = 32
     train_transform = transforms.Compose(transform)
-    train_data = dataset.CIFAR10(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
+    
+    if args.dataset == 'cifar10':
+        train_data = dataset.CIFAR10(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
+        transform.append(transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)))
+        image_size = 32
+    elif args.dataset == 'cifar100':
+        train_data = dataset.CIFAR100(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
+        transform.append(transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)))
+        image_size = 32
+    elif args.dataset == 'stl10':
+        train_data = dataset.STL10(root='data', split='train', transform=train_transform, download=True, triplet=args.triplet)
+        transform.append(transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713)))
+        image_size = 64
+    elif args.dataset == 'tinyimagenet':
+        train_data = dataset.TinyImageNet(root='data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
+        transform.append(transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262)))
+        image_size = 64
+
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     results = {'train_loss': []}
@@ -112,48 +120,42 @@ if __name__ == '__main__':
     scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
     
-    for epoch in range(1, args.epochs + 1):
-        # train
-        total_loss, total_num = 0, 0
-        data_bar = tqdm(train_loader)
+    learner.train()
+    t = time.time()
+    for i, (imgs, labels) in enumerate(cycle(train_loader), start=1):
 
-        learner.train()
-        adjust_learning_rate(optimizer, epoch, args.lr, scheduler)
-        for i, (imgs, labels) in enumerate(data_bar):
-            if epoch <= 10:
-                warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)
+        if i <= 1000:
+            warmup_learning_rate(optimizer, i, len(train_loader), warmup_to)
 
+        if args.triplet:
+            x1, x2, x3 = imgs
+        else:
+            x1, x2 = imgs
+
+        batch_size = x1.size(0)
+
+        with torch.cuda.amp.autocast():
             if args.triplet:
-                x1, x2, x3 = imgs
+                loss = learner(x1.cuda(), x2.cuda(), x3.cuda())
             else:
-                x1, x2 = imgs
+                loss = learner(x1.cuda(), x2.cuda())
 
-            batch_size = x1.size(0)
+        optimizer.zero_grad()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
-            with torch.cuda.amp.autocast():
-                if args.triplet:
-                    loss = learner(x1.cuda(), x2.cuda(), x3.cuda())
-                else:
-                    loss = learner(x1.cuda(), x2.cuda())
+        learner.update_moving_average()
 
-            total_num += batch_size
-            total_loss += loss.item() * batch_size
-
-            optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-
-            learner.update_moving_average()
-
-            data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f}'.format(epoch, args.epochs, total_loss / total_num))
+        if i % 100 == 0:
+            print(f'iter {i} time {time.time()-t:.2f} loss {loss.item():.4f}')
+            t = time.time()
+            results['train_loss'].append(loss.item())
+            data_frame = pd.DataFrame(data=results, index=range(len(results['train_loss'])))
+            data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='iter')
         
-        train_loss = total_loss / total_num
-        writer.add_scalar('train_loss', train_loss, epoch)
-        results['train_loss'].append(train_loss)
-        
-        # save statistics
-        data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
-        if epoch % 100 == 0:
-            torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
+        if i % 10000 == 0:
+            torch.save(model.state_dict(), result_path+f'{model_name}_{i}.pth')
+
+        if i == args.iters:
+            break

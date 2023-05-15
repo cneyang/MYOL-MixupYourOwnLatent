@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100, STL10, ImageFolder
+from torchvision.datasets import CIFAR10, CIFAR100, STL10, MNIST, FashionMNIST, KMNIST, USPS, SVHN
+from torchvision import transforms
 
 import os
 import argparse
@@ -70,50 +71,78 @@ if __name__ == '__main__':
     parser.add_argument('--target', default='cifar10', type=str, help='Target dataset')
     parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--checkpoint', type=int, default=1000)
-    parser.add_argument('--optim', default='adam', type=str, help='Optimizer')
-    parser.add_argument('--lr', default=2e-3, type=float, help='Learning rate')
+    parser.add_argument('--checkpoint', type=int, default=500)
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden dimension of the projection head')
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
+    parser.add_argument('--finetune', action='store_true', help='Fine tune the model')
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
-    batch_size = 512
+    args.epochs = 20 if args.finetune else 100
+
+    batch_size = 256 if args.finetune else 512
 
     model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
     model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_{model_name}_statistics_{args.checkpoint}.csv'
+    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
+    
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
+    if 'mnist' in args.target:
+        # 3 channel
+        transform = transforms.Compose([
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
+        ])
+
     if args.target == 'cifar10':
-        transform = dataset.CIFAR10.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.target == 'cifar100':
-        transform = dataset.CIFAR100.get_transform(train=False)
         train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
         test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
         num_class = 100
     elif args.target == 'stl10':
-        transform = dataset.STL10.get_transform(train=False)
         train_data = STL10(root='./data', split='train', transform=transform, download=True)
         test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10
-    elif args.target == 'tinyimagenet':
-        transform = dataset.TinyImageNet.get_transform(train=False)
-        train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=transform)
-        test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=transform)
-        num_class = 200
+    elif args.target == 'mnist':
+        train_data = MNIST(root='./data', train=True, transform=transform, download=True)
+        test_data = MNIST(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
+    elif args.target == 'fashionmnist':
+        train_data = FashionMNIST(root='./data', train=True, transform=transform, download=True)
+        test_data = FashionMNIST(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
+    elif args.target == 'kmnist':
+        train_data = KMNIST(root='./data', train=True, transform=transform, download=True)
+        test_data = KMNIST(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
+    elif args.target == 'usps':
+        train_data = USPS(root='./data', train=True, transform=transform, download=True)
+        test_data = USPS(root='./data', train=False, transform=transform, download=True)
+        num_class = 10
+    elif args.target == 'svhn':
+        train_data = SVHN(root='./data', split='train', transform=transform, download=True)
+        test_data = SVHN(root='./data', split='test', transform=transform, download=True)
+        num_class = 10
 
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
@@ -137,14 +166,22 @@ if __name__ == '__main__':
 
     train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
 
-    optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
+    if args.finetune:
+        optimizer = torch.optim.SGD([
+            {'params': encoder.parameters(), 'lr': 0.01},
+            {'params': fc.parameters(), 'lr': 0.1}],
+            momentum=0.9,
+            weight_decay=0)
+    else:
+        optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*len(train_loader), eta_min=0, last_epoch=-1)
     criterion = torch.nn.CrossEntropyLoss()
     
-    eval_every_n_epochs = 10
+    eval_every_n_epochs = 1 if args.finetune else 10
     test_results = {'test_acc@1': [], 'test_acc@5': []}
     print('Training...')
     for epoch in range(1, args.epochs + 1):
+        encoder.train(), fc.train()
         for x, y in train_loader:
             x = x.to(device)
             y = y.to(device)
@@ -152,7 +189,10 @@ if __name__ == '__main__':
             # zero the parameter gradients
             optimizer.zero_grad()        
             
-            out = fc(x)
+            if args.finetune:
+                out = fc(encoder(x))
+            else:
+                out = fc(x)
             loss = criterion(out, y)
             
             loss.backward()
@@ -161,15 +201,17 @@ if __name__ == '__main__':
         
         if epoch % eval_every_n_epochs == 0:
             total_correct_1, total_correct_5, total_num = 0.0, 0.0, 0
-            for x, y in test_loader:
-                x = x.to(device)
-                y = y.to(device)
+            encoder.eval(), fc.eval()
+            with torch.no_grad():
+                for x, y in test_loader:
+                    x = x.to(device)
+                    y = y.to(device)
 
-                out = fc(x)
-                prediction = torch.argsort(out, dim=-1, descending=True)
-                total_num += y.size(0)
-                total_correct_1 += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
-                total_correct_5 += torch.sum((prediction[:, 0:5] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+                    out = fc(x)
+                    prediction = torch.argsort(out, dim=-1, descending=True)
+                    total_num += y.size(0)
+                    total_correct_1 += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+                    total_correct_5 += torch.sum((prediction[:, 0:5] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
                 
             test_acc_1, test_acc5 = total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
             test_results['test_acc@1'].append(test_acc_1)

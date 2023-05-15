@@ -14,14 +14,6 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 
-def adjust_learning_rate(optimizer, epoch, lr, scheduler):
-    if scheduler is not None:
-        scheduler.step()
-    else:
-        lr *= 0.5 * (1. + math.cos(math.pi * epoch / 1000))
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
-
 def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
     p = (batch_id + 1 + epoch * total_batches) / (10 * total_batches)
     lr = p * warmup_to
@@ -34,10 +26,10 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--algo', default='myol', type=str, help='Algorithm')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--optim', default='adam', type=str, help='Optimizer')
-    parser.add_argument('--lr', default=2e-3, type=float, help='Learning rate')
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden dimension of the projection head')
+    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
@@ -118,7 +110,6 @@ if __name__ == '__main__':
         data_bar = tqdm(train_loader)
 
         learner.train()
-        adjust_learning_rate(optimizer, epoch, args.lr, scheduler)
         for i, (imgs, labels) in enumerate(data_bar):
             if epoch <= 10:
                 warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)

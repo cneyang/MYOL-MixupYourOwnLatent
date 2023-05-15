@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
 from torchvision.datasets import CIFAR10, CIFAR100, STL10, ImageFolder
-from torchvision import transforms
 
 import os
 import argparse
@@ -67,61 +66,42 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--labeled_ratio', type=float, default=0.01, help='Ratio of labeled data')
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--algo', type=str, default='myol')
+    parser.add_argument('--algo', type=str, default='byol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--checkpoint', type=int, default=500)
-    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
-    parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--no-gray', dest='gray', action='store_false', help='Do not use gray scale')
+    parser.add_argument('--no-color', dest='color', action='store_false', help='Do not use color jitter')
+    parser.add_argument('--no-flip', dest='flip', action='store_false', help='Do not use horizontal flip')
+    parser.add_argument('--checkpoint', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
-    if args.dataset == 'tinyimagenet':
-        batch_size = 32 if args.labeled_ratio == 0.01 else 128
-    else:
-        batch_size = 16 if args.labeled_ratio == 0.01 else 64
+    batch_size = 512
 
-    if args.dataset == 'stl10':
-        args.epochs = 50 if args.labeled_ratio == 0.01 else 30
-    else:
-        args.epochs = 20
-        
-    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/semisup{args.labeled_ratio}_{model_name}_statistics_{args.checkpoint}.csv'
-    print(model_name, args.checkpoint)
+    model_name = f'gray{args.gray}_color{args.color}_flip{args.flip}_{args.seed}'
+    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
+
+    print(args.algo.upper(), model_name, args.checkpoint)
     if os.path.exists(result_path):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
     if args.dataset == 'cifar10':
-        train_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ])
-        test_transform = dataset.CIFAR10.get_transform(train=False)
-        train_data = CIFAR10(root='./data', train=True, transform=train_transform, download=True)
-        test_data = CIFAR10(root='./data', train=False, transform=test_transform, download=True)
+        transform = dataset.CIFAR10.get_transform(train=False)
+        train_data = CIFAR10(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR10(root='./data', train=False, transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'cifar100':
-        train_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761])
-        ])
-        test_transform = dataset.CIFAR100.get_transform(train=False)
-        train_data = CIFAR100(root='./data', train=True, transform=train_transform, download=True)
-        test_data = CIFAR100(root='./data', train=False, transform=test_transform, download=True)
+        transform = dataset.CIFAR100.get_transform(train=False)
+        train_data = CIFAR100(root='./data', train=True, transform=transform, download=True)
+        test_data = CIFAR100(root='./data', train=False, transform=transform, download=True)
         num_class = 100
     elif args.dataset == 'stl10':
         transform = dataset.STL10.get_transform(train=False)
@@ -129,25 +109,11 @@ if __name__ == '__main__':
         test_data = STL10(root='./data', split='test', transform=transform, download=True)
         num_class = 10
     elif args.dataset == 'tinyimagenet':
-        train_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
-        ])
-        test_transform = dataset.TinyImageNet.get_transform(train=False)
-        train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=train_transform)
-        test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=test_transform)
+        transform = dataset.TinyImageNet.get_transform(train=False)
+        train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=transform)
+        test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=transform)
         num_class = 200
 
-    # sample n% of the data for each class
-    indices = []
-    n = int(len(train_data)/num_class)
-    for i in range(num_class):
-        idx = np.arange(i*n, (i+1)*n)
-        np.random.shuffle(idx)
-        indices.extend(idx[:int(n*args.labeled_ratio)])
-
-    train_data = torch.utils.data.Subset(train_data, indices)
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
 
@@ -159,29 +125,33 @@ if __name__ == '__main__':
 
     fc = FC(num_class=num_class)
     fc = fc.to(device)
-    
-    # vicreg
-    optimizer = torch.optim.SGD([
-        {'params': encoder.parameters(), 'lr': 0.01 if args.labeled_ratio == 0.1 else 0.03},
-        {'params': fc.parameters(), 'lr': 0.1 if args.labeled_ratio == 0.1 else 0.08}],
-        momentum=0.9,
-        weight_decay=0)
+
+    encoder.eval()
+    x_train, y_train = get_features_from_encoder(encoder, train_loader, device)
+    x_test, y_test = get_features_from_encoder(encoder, test_loader, device)
+
+    if len(x_train.shape) > 2:
+        x_train = torch.mean(x_train, dim=[2, 3])
+        x_test = torch.mean(x_test, dim=[2, 3])
+
+    train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
+
+    optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*len(train_loader), eta_min=0, last_epoch=-1)
     criterion = torch.nn.CrossEntropyLoss()
     
-    eval_every_n_epochs = 1
+    eval_every_n_epochs = 10
     test_results = {'test_acc@1': [], 'test_acc@5': []}
     print('Training...')
     for epoch in range(1, args.epochs + 1):
-        encoder.train(), fc.train()
-        for x, y in tqdm(train_loader, desc=f'Epoch {epoch}/{args.epochs}', leave=False):
+        for x, y in train_loader:
             x = x.to(device)
             y = y.to(device)
             
             # zero the parameter gradients
             optimizer.zero_grad()        
             
-            out = fc(encoder(x))
+            out = fc(x)
             loss = criterion(out, y)
             
             loss.backward()
@@ -190,17 +160,15 @@ if __name__ == '__main__':
         
         if epoch % eval_every_n_epochs == 0:
             total_correct_1, total_correct_5, total_num = 0.0, 0.0, 0
-            encoder.eval(), fc.eval()
-            with torch.no_grad():
-                for x, y in test_loader:
-                    x = x.to(device)
-                    y = y.to(device)
+            for x, y in test_loader:
+                x = x.to(device)
+                y = y.to(device)
 
-                    out = fc(encoder(x))
-                    prediction = torch.argsort(out, dim=-1, descending=True)
-                    total_num += y.size(0)
-                    total_correct_1 += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
-                    total_correct_5 += torch.sum((prediction[:, 0:5] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+                out = fc(x)
+                prediction = torch.argsort(out, dim=-1, descending=True)
+                total_num += y.size(0)
+                total_correct_1 += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+                total_correct_5 += torch.sum((prediction[:, 0:5] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
                 
             test_acc_1, test_acc5 = total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
             test_results['test_acc@1'].append(test_acc_1)
