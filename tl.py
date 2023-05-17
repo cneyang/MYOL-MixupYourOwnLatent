@@ -51,7 +51,6 @@ def get_features_from_encoder(encoder, loader, device):
             x_train.extend(feature_vector.cpu())
             y_train.extend(y.numpy())
 
-            
     x_train = torch.stack(x_train)
     y_train = torch.tensor(y_train)
     return x_train, y_train
@@ -90,7 +89,8 @@ if __name__ == '__main__':
     
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):
-        print('Already done')
+        df = pd.read_csv(result_path)
+        print(f'{args.algo} {args.target} finetune{args.finetune} {df["test_acc@1"].values[-1]:.2f}')
         import sys
         sys.exit()
         
@@ -98,11 +98,11 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    if 'mnist' in args.target:
+    if 'mnist' in args.target or 'usps' in args.target:
         # 3 channel
         transform = transforms.Compose([
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
         ])
     else:
@@ -156,16 +156,6 @@ if __name__ == '__main__':
     fc = FC(num_class=num_class)
     fc = fc.to(device)
 
-    encoder.eval()
-    x_train, y_train = get_features_from_encoder(encoder, train_loader, device)
-    x_test, y_test = get_features_from_encoder(encoder, test_loader, device)
-
-    if len(x_train.shape) > 2:
-        x_train = torch.mean(x_train, dim=[2, 3])
-        x_test = torch.mean(x_test, dim=[2, 3])
-
-    train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
-
     if args.finetune:
         optimizer = torch.optim.SGD([
             {'params': encoder.parameters(), 'lr': 0.01},
@@ -173,6 +163,16 @@ if __name__ == '__main__':
             momentum=0.9,
             weight_decay=0)
     else:
+        encoder.eval()
+        x_train, y_train = get_features_from_encoder(encoder, train_loader, device)
+        x_test, y_test = get_features_from_encoder(encoder, test_loader, device)
+        
+        if len(x_train.shape) > 2:
+            x_train = torch.mean(x_train, dim=[2, 3])
+            x_test = torch.mean(x_test, dim=[2, 3])
+
+        train_loader, test_loader = create_data_loaders_from_arrays(x_train, y_train, x_test, y_test)
+
         optimizer = torch.optim.SGD(fc.parameters(), lr=0.2, momentum=0.9, weight_decay=0, nesterov=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*len(train_loader), eta_min=0, last_epoch=-1)
     criterion = torch.nn.CrossEntropyLoss()
@@ -187,7 +187,7 @@ if __name__ == '__main__':
             y = y.to(device)
             
             # zero the parameter gradients
-            optimizer.zero_grad()        
+            optimizer.zero_grad()
             
             if args.finetune:
                 out = fc(encoder(x))
@@ -207,7 +207,10 @@ if __name__ == '__main__':
                     x = x.to(device)
                     y = y.to(device)
 
-                    out = fc(x)
+                    if args.finetune:
+                        out = fc(encoder(x))
+                    else:
+                        out = fc(x)
                     prediction = torch.argsort(out, dim=-1, descending=True)
                     total_num += y.size(0)
                     total_correct_1 += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()

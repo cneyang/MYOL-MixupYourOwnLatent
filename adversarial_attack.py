@@ -67,28 +67,27 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--algo', type=str, default='byol')
+    parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--no-gray', dest='gray', action='store_false', help='Do not use gray scale')
-    parser.add_argument('--no-color', dest='color', action='store_false', help='Do not use color jitter')
-    parser.add_argument('--no-flip', dest='flip', action='store_false', help='Do not use horizontal flip')
-    parser.add_argument('--checkpoint', type=int, default=100000)
+    parser.add_argument('--checkpoint', type=int, default=500)
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
+    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
+    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
 
-    model_name = f'gray{args.gray}_color{args.color}_flip{args.flip}_{args.seed}'
-    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
-
-    print(args.algo.upper(), args.batch_size, model_name, args.checkpoint)
-    if os.path.exists(result_path):
-        df = pd.read_csv(result_path)
-        print(df['test_acc@1'].values[-1])
-        import sys
-        sys.exit()
+    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
+    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
+    # result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
+    # print(model_name, args.checkpoint)
+    # if os.path.exists(result_path):
+    #     print('Already done')
+    #     import sys
+    #     sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -176,5 +175,74 @@ if __name__ == '__main__':
             test_results['test_acc@5'].append(test_acc5)
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
-    results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(result_path, index_label='epoch')
+    # results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
+    # results.to_csv(result_path, index_label='epoch')
+
+    test_loader = DataLoader(test_data, batch_size=100,
+                            num_workers=0, drop_last=False, shuffle=True)
+    # FGSM
+    epsilons = [4/255, 8/255]
+    accuracies = []
+    for eps in epsilons:
+        correct = 0
+        for x, y in test_loader:
+            x = x.to(device)
+            y = y.to(device)
+            x.requires_grad = True
+
+            out = fc(encoder(x))
+            loss = criterion(out, y)
+
+            encoder.zero_grad()
+            fc.zero_grad()
+            loss.backward()
+
+            # Collect the element-wise sign of the data gradient
+            sign_data_grad = x.grad.data.sign()
+            # Create the perturbed image by adjusting each pixel of the input image
+            perturbed_image = x + eps * sign_data_grad
+            perturbed_image = torch.clamp(perturbed_image, 0, 1)
+
+            # Re-classify the perturbed image
+            output = fc(encoder(perturbed_image))
+            prediction = torch.argsort(output, dim=-1, descending=True)
+            correct += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+        accuracy = correct / total_num * 100
+        accuracies.append(accuracy)
+        print("Epsilon: {}/255\tTest Accuracy = {} / {} = {}".format(int(eps*255), int(correct), total_num, accuracy))
+
+    # PGD
+    epsilon = 4/255
+    iterations = [8, 16]
+    accuracies = []
+    for it in iterations:
+        correct = 0
+        for x, y in test_loader:
+            x = x.to(device)
+            y = y.to(device)
+
+            perturbed_image = x.detach().clone()
+            perturbed_image += torch.zeros_like(perturbed_image).uniform_(-epsilon, epsilon)
+            for i in range(it):
+                perturbed_image.requires_grad_()
+                out = fc(encoder(perturbed_image))
+                loss = criterion(out, y)
+
+                encoder.zero_grad()
+                fc.zero_grad()
+                loss.backward()
+
+                # Collect the element-wise sign of the data gradient
+                sign_data_grad = perturbed_image.grad.detach().sign()
+                # Create the perturbed image by adjusting each pixel of the input image
+                perturbed_image = perturbed_image.detach() + epsilon * sign_data_grad
+                perturbed_image = x + torch.clamp(perturbed_image-x, -epsilon, epsilon).detach()
+                perturbed_image = torch.clamp(perturbed_image, 0, 1)
+
+            # Re-classify the perturbed image
+            output = fc(encoder(perturbed_image))
+            prediction = torch.argsort(output, dim=-1, descending=True)
+            correct += torch.sum((prediction[:, 0:1] == y.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+        accuracy = correct / total_num * 100
+        accuracies.append(accuracy)
+        print("Iterations: {}\tTest Accuracy = {} / {} = {}".format(it, int(correct), total_num, accuracy))
