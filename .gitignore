@@ -4,5 +4,7 @@
 /runs
 *.pth
 *.csv
+*.svg
+*.png
 results*
 *.ipynb
