@@ -77,7 +77,13 @@ if __name__ == '__main__':
     model = Model(args.dataset).cuda()
 
     # get class
-    algo = getattr(__import__('algo'), args.algo.upper())
+    if args.algo == 'simclr':
+        from simclr import SimCLR
+        algo = SimCLR
+    elif args.algo == 'moco':
+        from moco import MoCo
+    else:
+        algo = getattr(__import__('algo'), args.algo.upper())
 
     learner = algo(
         model.f,

@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--checkpoint', type=int, default=1000)
+    parser.add_argument('--checkpoint', type=int, default=500)
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
