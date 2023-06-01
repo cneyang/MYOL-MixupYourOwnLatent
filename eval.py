@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--checkpoint', type=int, default=1000)
+    parser.add_argument('--checkpoint', type=int, default=500)
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
@@ -77,8 +77,6 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
-
-    batch_size = 512
 
     model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
     model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
@@ -114,10 +112,10 @@ if __name__ == '__main__':
         test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=transform)
         num_class = 200
 
-    train_loader = DataLoader(train_data, batch_size=batch_size,
+    train_loader = DataLoader(train_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
-    test_loader = DataLoader(test_data, batch_size=batch_size,
+    test_loader = DataLoader(test_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
