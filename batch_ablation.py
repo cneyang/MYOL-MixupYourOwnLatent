@@ -100,6 +100,7 @@ if __name__ == '__main__':
         algo = SimCLR
     elif args.algo == 'moco':
         from moco import MoCo
+        algo = MoCo
     else:
         algo = getattr(__import__('algo'), args.algo.upper())
 
