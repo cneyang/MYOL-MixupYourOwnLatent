@@ -67,23 +67,26 @@ if __name__ == '__main__':
         transform.append(transforms.RandomGrayscale(p=0.2))
     transform.append(transforms.ToTensor())
 
-    train_transform = transforms.Compose(transform)
     
     if args.dataset == 'cifar10':
-        train_data = dataset.CIFAR10(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         transform.append(transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)))
+        train_transform = transforms.Compose(transform)
+        train_data = dataset.CIFAR10(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         image_size = 32
     elif args.dataset == 'cifar100':
-        train_data = dataset.CIFAR100(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         transform.append(transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)))
+        train_transform = transforms.Compose(transform)
+        train_data = dataset.CIFAR100(root='data', train=True, transform=train_transform, download=True, triplet=args.triplet)
         image_size = 32
     elif args.dataset == 'stl10':
-        train_data = dataset.STL10(root='data', split='train', transform=train_transform, download=True, triplet=args.triplet)
         transform.append(transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713)))
+        train_transform = transforms.Compose(transform)
+        train_data = dataset.STL10(root='data', split='train', transform=train_transform, download=True, triplet=args.triplet)
         image_size = 64
     elif args.dataset == 'tinyimagenet':
-        train_data = dataset.TinyImageNet(root='data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
         transform.append(transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262)))
+        train_transform = transforms.Compose(transform)
+        train_data = dataset.TinyImageNet(root='data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
         image_size = 64
 
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)

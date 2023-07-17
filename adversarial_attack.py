@@ -82,12 +82,16 @@ if __name__ == '__main__':
 
     model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
     model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    # result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
-    # print(model_name, args.checkpoint)
-    # if os.path.exists(result_path):
-    #     print('Already done')
-    #     import sys
-    #     sys.exit()
+    result_path = f'attack/{args.dataset}'
+    attack_result_path = f'{result_path}/{args.algo}_attack_{args.seed}.csv'
+
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+        
+    if os.path.exists(attack_result_path):
+        print('Already done')
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -181,6 +185,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=100,
                             num_workers=0, drop_last=False, shuffle=True)
     # FGSM
+    attack_results = {'fgsm(4/255)': [], 'fgsm(8/255)': [], 'pgd(8)': [], 'pgd(16)': []}
     epsilons = [4/255, 8/255]
     accuracies = []
     for eps in epsilons:
@@ -210,6 +215,8 @@ if __name__ == '__main__':
         accuracy = correct / total_num * 100
         accuracies.append(accuracy)
         print("Epsilon: {}/255\tTest Accuracy = {} / {} = {}".format(int(eps*255), int(correct), total_num, accuracy))
+    attack_results['fgsm(4/255)'].append(accuracies[0])
+    attack_results['fgsm(8/255)'].append(accuracies[1])
 
     # PGD
     epsilon = 4/255
@@ -246,3 +253,8 @@ if __name__ == '__main__':
         accuracy = correct / total_num * 100
         accuracies.append(accuracy)
         print("Iterations: {}\tTest Accuracy = {} / {} = {}".format(it, int(correct), total_num, accuracy))
+    attack_results['pgd(8)'].append(accuracies[0])
+    attack_results['pgd(16)'].append(accuracies[1])
+
+    results = pd.DataFrame(attack_results, index=range(1))
+    results.to_csv(attack_result_path, index_label='epoch')

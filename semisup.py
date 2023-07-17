@@ -81,14 +81,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.dataset == 'tinyimagenet':
-        batch_size = 32 if args.labeled_ratio == 0.01 else 128
+        batch_size = 64
     else:
-        batch_size = 16 if args.labeled_ratio == 0.01 else 64
-
-    if args.dataset == 'stl10':
-        args.epochs = 50 if args.labeled_ratio == 0.01 else 30
-    else:
-        args.epochs = 20
+        batch_size = 32
+    args.epochs = 20
         
     model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
     model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
@@ -96,8 +92,8 @@ if __name__ == '__main__':
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):
         print('Already done')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -112,7 +108,7 @@ if __name__ == '__main__':
         test_transform = dataset.CIFAR10.get_transform(train=False)
         train_data = CIFAR10(root='./data', train=True, transform=train_transform, download=True)
         test_data = CIFAR10(root='./data', train=False, transform=test_transform, download=True)
-        num_class = 10
+        class_idx = np.array(train_data.targets)
     elif args.dataset == 'cifar100':
         train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
@@ -122,12 +118,18 @@ if __name__ == '__main__':
         test_transform = dataset.CIFAR100.get_transform(train=False)
         train_data = CIFAR100(root='./data', train=True, transform=train_transform, download=True)
         test_data = CIFAR100(root='./data', train=False, transform=test_transform, download=True)
-        num_class = 100
+        class_idx = np.array(train_data.targets)
     elif args.dataset == 'stl10':
-        transform = dataset.STL10.get_transform(train=False)
-        train_data = STL10(root='./data', split='train', transform=transform, download=True)
-        test_data = STL10(root='./data', split='test', transform=transform, download=True)
-        num_class = 10
+        train_transform = transforms.Compose([
+            transforms.Resize(64),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4467, 0.4398, 0.4066], [0.2603, 0.2566, 0.2713])
+        ])
+        test_transform = dataset.STL10.get_transform(train=False)
+        train_data = STL10(root='./data', split='train', transform=train_transform, download=True)
+        test_data = STL10(root='./data', split='test', transform=test_transform, download=True)
+        class_idx = np.array(train_data.labels)
     elif args.dataset == 'tinyimagenet':
         train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
@@ -137,20 +139,20 @@ if __name__ == '__main__':
         test_transform = dataset.TinyImageNet.get_transform(train=False)
         train_data = ImageFolder(root='./data/tiny-imagenet-200/train', transform=train_transform)
         test_data = ImageFolder(root='./data/tiny-imagenet-200/val', transform=test_transform)
-        num_class = 200
+        class_idx = np.array(train_data.targets)
 
-    # sample n% of the data for each class
+    num_class = len(train_data.classes)
+    class_idx = np.array([np.where(class_idx == i)[0] for i in range(num_class)])
+
     indices = []
-    n = int(len(train_data)/num_class)
     for i in range(num_class):
-        idx = np.arange(i*n, (i+1)*n)
+        idx = class_idx[i]
         np.random.shuffle(idx)
-        indices.extend(idx[:int(n*args.labeled_ratio)])
-
+        indices.extend(idx[:int(len(idx) * args.labeled_ratio)])
+        
     train_data = torch.utils.data.Subset(train_data, indices)
     train_loader = DataLoader(train_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
-
     test_loader = DataLoader(test_data, batch_size=batch_size,
                             num_workers=0, drop_last=False, shuffle=True)
 

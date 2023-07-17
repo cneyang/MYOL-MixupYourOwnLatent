@@ -70,7 +70,8 @@ if __name__ == '__main__':
         train_data = dataset.TinyImageNet(root='./data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
         image_size = 64
 
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    drop = True if args.algo == 'moco' else False
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=drop)
 
     results = {'train_loss': []}
     
@@ -82,6 +83,7 @@ if __name__ == '__main__':
         algo = SimCLR
     elif args.algo == 'moco':
         from moco import MoCo
+        algo = MoCo
     else:
         algo = getattr(__import__('algo'), args.algo.upper())
 

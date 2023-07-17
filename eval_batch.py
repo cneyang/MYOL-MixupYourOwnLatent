@@ -87,8 +87,8 @@ if __name__ == '__main__':
     if os.path.exists(result_path):
         df = pd.read_csv(result_path)
         print(df['test_acc@1'].values[-1])
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)

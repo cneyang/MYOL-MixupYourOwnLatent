@@ -22,11 +22,8 @@ class MoCo(nn.Module):
             nn.Linear(2048, 2048),
             nn.ReLU(),
             nn.Linear(2048, projection_size)
-        )
-        self.encoder_k = copy.deepcopy(net)
-        self.projector = nn.Sequential(nn.Linear(2048, 2048),
-                                       nn.ReLU(),
-                                       nn.Linear(2048, projection_size)).cuda()
+        ).cuda()
+        self.encoder_k = copy.deepcopy(self.encoder_q).cuda()
         
         for param_q, param_k in zip(
             self.encoder_q.parameters(), self.encoder_k.parameters()
@@ -34,7 +31,7 @@ class MoCo(nn.Module):
             param_k.data.copy_(param_q.data)
             param_k.requires_grad = False
 
-        self.register_buffer("queue", torch.randn(projection_size, self.K))
+        self.register_buffer("queue", torch.randn(projection_size, self.K).cuda())
         self.queue = F.normalize(self.queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))

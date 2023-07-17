@@ -81,8 +81,6 @@ if __name__ == '__main__':
 
     args.epochs = 20 if args.finetune else 100
 
-    batch_size = 256 if args.finetune else 512
-
     model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
     model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
     result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
@@ -101,12 +99,14 @@ if __name__ == '__main__':
     if 'mnist' in args.target or 'usps' in args.target:
         # 3 channel
         transform = transforms.Compose([
+            transforms.Resize(64),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
         ])
     else:
         transform = transforms.Compose([
+            transforms.Resize(64),
             transforms.ToTensor(),
             transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
         ])
@@ -144,10 +144,7 @@ if __name__ == '__main__':
         test_data = SVHN(root='./data', split='test', transform=transform, download=True)
         num_class = 10
 
-    train_loader = DataLoader(train_data, batch_size=batch_size,
-                            num_workers=0, drop_last=False, shuffle=True)
-
-    test_loader = DataLoader(test_data, batch_size=batch_size,
+    test_loader = DataLoader(test_data, batch_size=512,
                             num_workers=0, drop_last=False, shuffle=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -157,12 +154,18 @@ if __name__ == '__main__':
     fc = fc.to(device)
 
     if args.finetune:
+        train_loader = DataLoader(train_data, batch_size=64,
+                            num_workers=0, drop_last=False, shuffle=True)
+        
         optimizer = torch.optim.SGD([
             {'params': encoder.parameters(), 'lr': 0.01},
             {'params': fc.parameters(), 'lr': 0.1}],
             momentum=0.9,
             weight_decay=0)
     else:
+        train_loader = DataLoader(train_data, batch_size=512,
+                            num_workers=0, drop_last=False, shuffle=True)
+        
         encoder.eval()
         x_train, y_train = get_features_from_encoder(encoder, train_loader, device)
         x_test, y_test = get_features_from_encoder(encoder, test_loader, device)

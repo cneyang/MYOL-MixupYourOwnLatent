@@ -48,8 +48,8 @@ if __name__ == '__main__':
     print(model_name)
     if os.path.exists(result_path+f'{model_name}_{args.epochs}.pth'):
         print(model_name, 'already exists')
-        # import sys
-        # sys.exit()
+        import sys
+        sys.exit()
         
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -88,7 +88,8 @@ if __name__ == '__main__':
         train_data = dataset.TinyImageNet(root='data/tiny-imagenet-200/train', transform=train_transform, triplet=args.triplet)
         image_size = 64
 
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    drop = True if args.algo == 'moco' else False
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=drop)
 
     results = {'train_loss': []}
     
