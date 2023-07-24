@@ -255,6 +255,8 @@ class MYOL(BYOL):
         x2 = None,
         return_embedding = False,
         return_projection = True,
+        alpha = 1.0,
+        gamma = 1.0
     ):
         assert not (self.training and x1.shape[0] == 1), 'you must have greater than 1 sample when training, due to the batchnorm in the projection layer'
 
@@ -281,7 +283,7 @@ class MYOL(BYOL):
 
         byol_loss = (loss_one + loss_two).mean()
 
-        lam = np.random.beta(1.0, 1.0, size=x1.size(0))
+        lam = np.random.beta(alpha, alpha, size=x1.size(0))
         lam = torch.FloatTensor(lam).reshape(-1, 1, 1, 1).cuda()
         idx = torch.randperm(x1.size(0)).cuda()
 
@@ -296,7 +298,7 @@ class MYOL(BYOL):
 
         mixup_loss = loss_fn(mixed_pred, target_proj).mean()
 
-        loss = byol_loss + mixup_loss
+        loss = byol_loss + gamma * mixup_loss
 
         return loss
     

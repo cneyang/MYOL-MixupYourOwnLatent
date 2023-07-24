@@ -67,26 +67,25 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
-    parser.add_argument('--algo', type=str, default='byol')
+    parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--no-gray', dest='gray', action='store_false', help='Do not use gray scale')
-    parser.add_argument('--no-color', dest='color', action='store_false', help='Do not use color jitter')
-    parser.add_argument('--no-flip', dest='flip', action='store_false', help='Do not use horizontal flip')
-    parser.add_argument('--checkpoint', type=int, default=100000)
+    parser.add_argument('--checkpoint', type=int, default=500)
+    parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
+    parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
     parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--alpha', default=1.0, type=float, help='Beta distribution parameter')
+    parser.add_argument('--gamma', default=1.0, type=float, help='Regularization weight')
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
 
-    model_name = f'gray{args.gray}_color{args.color}_flip{args.flip}_{args.seed}'
+    model_name = f'{args.algo}_{args.optim}{args.lr}_alpha{args.alpha}_gamma{args.gamma}_{args.seed}'
     model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
     result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
-
-    print(args.algo.upper(), args.batch_size, model_name, args.checkpoint)
+    print(model_name, args.checkpoint)
     if os.path.exists(result_path):
-        df = pd.read_csv(result_path)
-        print(df['test_acc@1'].values[-1])
+        print('Already done')
         import sys
         sys.exit()
         
