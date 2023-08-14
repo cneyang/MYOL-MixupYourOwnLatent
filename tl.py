@@ -81,9 +81,10 @@ if __name__ == '__main__':
 
     args.epochs = 20 if args.finetune else 100
 
-    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
+    # model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
+    model_name = f'{args.algo}_{args.optim}{args.lr}_alpha2.0_gamma1.0_{args.seed}'
+    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
     
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):

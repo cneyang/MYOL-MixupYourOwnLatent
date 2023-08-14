@@ -80,9 +80,10 @@ if __name__ == '__main__':
 
     batch_size = 512
 
-    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'attack/{args.dataset}'
+    # model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
+    model_name = f'{args.algo}_{args.optim}{args.lr}_alpha2.0_gamma1.0_{args.seed}'
+    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'ablation/{args.dataset}'
     attack_result_path = f'{result_path}/{args.algo}_attack_{args.seed}.csv'
 
     if not os.path.exists(result_path):

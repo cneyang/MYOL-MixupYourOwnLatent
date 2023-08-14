@@ -34,6 +34,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.triplet = True if args.algo == 'tribyol' else False
 
+    args.epochs = int(args.epochs * (args.batch_size / 256))
     model_name = f'{args.algo}_{args.optim}{args.lr}_alpha{args.alpha}_gamma{args.gamma}_{args.seed}'
 
     result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
@@ -149,3 +150,5 @@ if __name__ == '__main__':
         data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
         if epoch % 100 == 0:
             torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
+
+    torch.save(model.state_dict(), result_path+f'{model_name}_{args.epochs}.pth')
