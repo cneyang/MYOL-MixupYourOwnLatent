@@ -1,17 +1,14 @@
 import os
-import math
 import argparse
 import pandas as pd
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
-
 import numpy as np
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 import dataset
 from model import Model
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 
 
 def warmup_learning_rate(optimizer, epoch, batch_id, total_batches, warmup_to):
@@ -28,16 +25,15 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     args = parser.parse_args()
     args.triplet = True if args.algo == 'tribyol' else False
 
-    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
+    args.epochs = int(args.epochs * (args.batch_size / 256))
+    model_name = f'{args.algo}_batch{args.batch_size}_{args.optim}{args.lr}_{args.seed}'
 
-    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/'
+    result_path = f'results/pretrain/{args.dataset}/{args.algo}/'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
@@ -51,8 +47,6 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     
-    writer = SummaryWriter('runs/' + f'{args.dataset}/batch{args.batch_size}/' + model_name)
-
     if args.dataset == 'cifar10':
         train_transform = dataset.CIFAR10.get_transform(train=True)
         train_data = dataset.CIFAR10(root='./data', train=True, transform=train_transform, download=True, triplet=args.triplet)
@@ -78,36 +72,17 @@ if __name__ == '__main__':
     model = Model(args.dataset).cuda()
 
     # get class
-    if args.algo == 'simclr':
-        from simclr import SimCLR
-        algo = SimCLR
-    elif args.algo == 'moco':
-        from moco import MoCo
-        algo = MoCo
-    else:
-        algo = getattr(__import__('algo'), args.algo.upper())
+    algo = getattr(__import__('algo'), args.algo.upper())
 
     learner = algo(
         model.f,
         image_size=image_size,
-        hidden_layer=-2,
-        projection_size=128,
-        projection_hidden_size=args.hidden_dim,
-        moving_average_decay=0.996,
     )
 
     if args.optim == 'adam':
         optimizer = optim.Adam(learner.parameters(), lr=args.lr, weight_decay=1e-6)
     elif args.optim == 'sgd':
         optimizer = optim.SGD(learner.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
-
-    if args.cos:
-        scheduler = None
-        eta_min = args.lr * 0.001
-        warmup_to = eta_min + (args.lr - eta_min) * (1 + math.cos(math.pi * 10 / 1000)) / 2
-    else:
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[950, 975], gamma=0.2)
-        warmup_to = args.lr
 
     scaler = torch.cuda.amp.GradScaler()
     least_loss = np.Inf
@@ -120,7 +95,7 @@ if __name__ == '__main__':
         learner.train()
         for i, (imgs, labels) in enumerate(data_bar):
             if epoch <= 10:
-                warmup_learning_rate(optimizer, epoch, i, len(train_loader), warmup_to)
+                warmup_learning_rate(optimizer, epoch, i, len(train_loader), args.lr)
 
             if args.triplet:
                 x1, x2, x3 = imgs
@@ -148,7 +123,6 @@ if __name__ == '__main__':
             data_bar.set_description('Epoch: [{}/{}] Train Loss: {:.4f}'.format(epoch, args.epochs, total_loss / total_num))
         
         train_loss = total_loss / total_num
-        writer.add_scalar('train_loss', train_loss, epoch)
         results['train_loss'].append(train_loss)
         
         # save statistics
@@ -156,3 +130,5 @@ if __name__ == '__main__':
         data_frame.to_csv(result_path+f'{model_name}_statistics.csv', index_label='epoch')
         if epoch % 100 == 0:
             torch.save(model.state_dict(), result_path+f'{model_name}_{epoch}.pth')
+
+    torch.save(model.state_dict(), result_path+f'{model_name}_{args.epochs}.pth')

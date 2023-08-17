@@ -50,7 +50,6 @@ def get_features_from_encoder(encoder, loader, device):
             x_train.extend(feature_vector.cpu())
             y_train.extend(y.numpy())
 
-            
     x_train = torch.stack(x_train)
     y_train = torch.tensor(y_train)
     return x_train, y_train
@@ -72,23 +71,21 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint', type=int, default=500)
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
 
-    # model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_name = f'{args.algo}_{args.optim}{args.lr}_alpha2.0_gamma1.0_{args.seed}'
-    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'ablation/{args.dataset}'
-    attack_result_path = f'{result_path}/{args.algo}_attack_{args.seed}.csv'
+    model_name = f'{args.algo}_batch{args.batch_size}_{args.optim}{args.lr}_{args.seed}'
+    model_path = f'results/pretrain/{args.dataset}/{args.algo}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'results/downstream/{args.dataset}/{args.algo}'
+    attack_result_path = f'{result_path}/attack_{model_name}_statistics_{args.checkpoint}.csv'
 
     if not os.path.exists(result_path):
         os.makedirs(result_path)
-        
+    
+    print(model_name, args.checkpoint)
     if os.path.exists(attack_result_path):
         print('Already done')
         import sys
@@ -180,8 +177,6 @@ if __name__ == '__main__':
             test_results['test_acc@5'].append(test_acc5)
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
-    # results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    # results.to_csv(result_path, index_label='epoch')
 
     test_loader = DataLoader(test_data, batch_size=100,
                             num_workers=0, drop_last=False, shuffle=True)

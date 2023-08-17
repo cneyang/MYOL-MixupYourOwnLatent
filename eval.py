@@ -68,21 +68,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--algo', type=str, default='myol')
-    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--checkpoint', type=int, default=500)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     batch_size = 512
 
-    model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'main_result/{args.dataset}/results_{args.algo}_batch{args.batch_size}/linear_{model_name}_statistics_{args.checkpoint}.csv'
+    model_name = f'{args.algo}_batch{args.batch_size}_{args.optim}{args.lr}_{args.seed}'
+    model_path = f'results/pretrain/{args.dataset}/{args.algo}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'results/pretrain/{args.dataset}/{args.algo}/linear_{model_name}_statistics_{args.checkpoint}.csv'
+    
     print(model_name, args.checkpoint)
     if os.path.exists(result_path):
         print('Already done')

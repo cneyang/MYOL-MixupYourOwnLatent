@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-import dataset
 from model import Model
 
 
@@ -73,22 +72,23 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint', type=int, default=500)
     parser.add_argument('--optim', default='sgd', type=str, help='Optimizer')
     parser.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-    parser.add_argument('--cos', action='store_true', help='Use cosine annealing')
-    parser.add_argument('--hidden_dim', default=2048, type=int, help='Hidden dimension of the projection head')
     parser.add_argument('--finetune', action='store_true', help='Fine tune the model')
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
 
     args.epochs = 20 if args.finetune else 100
 
-    # model_name = f'{args.algo}_{args.optim}{args.lr}_cos{args.cos}_{args.hidden_dim}_{args.seed}'
-    model_name = f'{args.algo}_{args.optim}{args.lr}_alpha2.0_gamma1.0_{args.seed}'
-    model_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/{model_name}_{args.checkpoint}.pth'
-    result_path = f'ablation/{args.dataset}/results_{args.algo}_batch{args.batch_size}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
+    model_name = f'{args.algo}_batch{args.batch_size}_{args.optim}{args.lr}_{args.seed}'
+    model_path = f'results/pretrain/{args.dataset}/{args.algo}/{model_name}_{args.checkpoint}.pth'
+    result_path = f'results/downstream/{args.dataset}/{args.algo}'
+    tl_result_path = f'{result_path}/tl_{args.target}_finetune{args.finetune}_{model_name}_statistics_{args.checkpoint}.csv'
     
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+
     print(model_name, args.checkpoint)
-    if os.path.exists(result_path):
-        df = pd.read_csv(result_path)
+    if os.path.exists(tl_result_path):
+        df = pd.read_csv(tl_result_path)
         print(f'{args.algo} {args.target} finetune{args.finetune} {df["test_acc@1"].values[-1]:.2f}')
         import sys
         sys.exit()
@@ -226,4 +226,4 @@ if __name__ == '__main__':
             print(f"Epoch: {epoch} Test Acc@1: {test_acc_1:.2f}% Test Acc@5: {test_acc5:.2f}%")
         
     results = pd.DataFrame(test_results, index=range(eval_every_n_epochs, args.epochs+1, eval_every_n_epochs))
-    results.to_csv(result_path, index_label='epoch')
+    results.to_csv(tl_result_path, index_label='epoch')
