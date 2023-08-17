@@ -65,8 +65,8 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--target', default='cifar10', type=str, help='Target dataset')
+    parser.add_argument('--dataset', default='tinyimagenet', type=str, help='Dataset')
     parser.add_argument('--algo', type=str, default='myol')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--checkpoint', type=int, default=500)
