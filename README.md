@@ -7,8 +7,8 @@ python train.py --dataset DATASET_NAME --algo ALGORITHM_NAME --epochs EPOCHS
 python eval.py --dataset DATASET_NAME --algo ALGORITHM_NAME --checkpoint EPOCHS
 ```
 ### List of datasets and algorithms
-- DATASET_NAME: cifar10, cifar100, stl10, tinyimagenet
-- ALGORITHM_NAME: simclr, moco, byol, tribyol, unmix, imix, myol
+- DATASET_NAME: `cifar10`, `cifar100`, `stl10`, `tinyimagenet`
+- ALGORITHM_NAME: `simclr`, `moco`, `byol`, `tribyol`, `unmix`, `imix`, `myol`
 
 ## Downstream Tasks
 ```bash
@@ -23,3 +23,6 @@ python tl.py --target TARGET --dataset DATASET_NAME --algo ALGORITHM_NAME --chec
 # Adversarial attack
 python adversarial_attack.py --dataset DATASET_NAME --algo ALGORITHM_NAME --checkpoint EPOCHS
 ```
+
+## Supplementary Material
+See [Appendix.pdf](./Appendix.pdf) for full dataset results and pseudo-code.
